@@ -1,0 +1,78 @@
+---
+title: "using-lin"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{using-lin}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(Lin)
+```
+
+# Pending works
+```{r}
+# Simulate a data set with variable labels
+library(Lin)
+library(tibble)
+
+# Create a tibble with some data and assign labels
+study_data <- tibble(
+  participant = 1:5,
+  age = c(23, 30, 31, 29, 25),
+  group = c("Control", "Treatment", "Control", "Treatment", "Control")
+)
+attr(study_data$participant, "label") <- "Participant ID"
+attr(study_data$age, "label") <- "Age of participant"
+attr(study_data$group, "label") <- "Experimental Group"
+
+# Use extract_labels to get a table of variable labels
+labels_table <- extract_labels(study_data)
+labels_table
+#> # A tibble: 3 x 2
+#>   variable    label             
+#>   <chr>       <chr>             
+#> 1 participant Participant ID    
+#> 2 age         Age of participant
+#> 3 group       Experimental Group
+
+# Now demonstrate apa() on a summary table.
+# For instance, summarize the mean age by group:
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+summary_tbl <- study_data %>% group_by(group) %>% summarize(MeanAge = mean(age))
+summary_tbl
+#> # A tibble: 2 x 2
+#>   group    MeanAge
+#>   <chr>      <dbl>
+#> 1 Control     24.0
+#> 2 Treatment   30.0
+
+# Use apa() to format this summary table in APA style
+apa(summary_tbl, title = "Mean Age by Group")
+```
+
+# Pending works
+```{text}
+In the vignette, I need to:
+- Give a short introduction about the package and the scenario for using these functions.
+- Simulate a small dataset and demonstrate extract_labels:  
+  - For example, simulate a data frame that mimics a survey or experiment data, where columns have labels.
+  - Show how to set labels (as you did in examples) and then use extract_labels(df) to get a summary of labels.
+  - Discuss how this could be useful (e.g., to quickly extract a codebook from a labeled dataset).
+- Demonstrate apa:
+  - Create a small summary table or use an existing dataset to format a table. For example, you could create a table of summary statistics (like the mean and SD of a variable by group) and then use apa() to format it.
+  - Show the output of apa() in the vignette (since vignettes are rendered, the formatted table will appear nicely).
+```
+
+
