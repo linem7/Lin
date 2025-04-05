@@ -4,6 +4,8 @@
 # Lin
 
 <!-- badges: start -->
+
+[![R-CMD-check](https://github.com/linem7/Lin/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/linem7/Lin/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 The goal of Lin is to provide some useful functions
@@ -27,22 +29,19 @@ This is a basic example which shows you how to solve a common problem:
 ``` r
 # Load the package (assuming it's installed or you're in development mode)
 library(Lin)
+library(tibble)
 
-# Example 1: Use extract_labels on a data frame with labeled columns
-data <- data.frame(
-  subject = 1:3,
-  score   = c(10, 8, 9)
+df <- tibble(
+  id = 1:3,
+  score = c(10, 9, 8)
 )
-attr(data$subject, "label") <- "Subject ID"
-attr(data$score, "label") <- "Test Score"
+attr(df$id, "label") <- "Participant ID"
+attr(df$score, "label") <- "Test Score"
 
-# Extract labels
-label_df <- extract_labels(data)
-print(label_df)
-#> NULL
-#> # A tibble: 2 x 2
-#>   variable label      
-#>   <chr>    <chr>      
-#> 1 subject  Subject ID 
+extract_labels(df)
+#> # A tibble: 2 × 2
+#>   Variable Label         
+#>   <chr>    <chr>         
+#> 1 id       Participant ID
 #> 2 score    Test Score
 ```

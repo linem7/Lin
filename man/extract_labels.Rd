@@ -22,4 +22,5 @@ df <- data.frame(id = 1:3, score = c(5, 4, 8))
 attr(df$id, "label") <- "ID Number"
 attr(df$score, "label") <- "Score"
 extract_labels(df)
+
 }
