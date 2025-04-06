@@ -187,7 +187,7 @@ fit_table <- function(...,
     extra_diff <- c()
     if("AIC" %in% indices) extra_diff <- c(extra_diff, "ΔAIC")
     if("BIC" %in% indices) extra_diff <- c(extra_diff, "ΔBIC")
-    # Also include any other indices provided that exist in our holder.
+    # Also include any other indices provided that exist in to holder.
     extra_change <- union(intersect(indices, colnames(holder)), extra_diff)
     fit_cols <- union(default_indices, indices)
     change_cols <- union(default_diff, extra_diff)
