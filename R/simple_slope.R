@@ -163,3 +163,5 @@ simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
 
   return(p)
 }
+
+
