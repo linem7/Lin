@@ -18,6 +18,7 @@ RoxygenNote: 7.3.2
 Imports: 
     bruceR,
     dplyr,
+    ggplot2,
     kableExtra,
     knitr,
     magrittr,
