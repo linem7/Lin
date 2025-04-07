@@ -5,27 +5,19 @@
 \title{Simple Slope Plot Function}
 \usage{
 simple_slope(
-  b0 = 0,
-  b1,
-  b2,
-  b3,
-  mean_x,
+  intercept = 0,
+  b_x,
+  b_w,
+  b_int,
+  mean_x = 0,
   var_x,
-  mean_w,
+  mean_w = 0,
   var_w,
   legend_position = "right",
   fontsize = 12
 )
 }
 \arguments{
-\item{b0}{Intercept of the outcome variable. Note: the default intercept is 0, which corresponds to the default identification in Mplus for latent outcomes. Adjust b0 according to your own model results. In manifest models, the intercept is usually non-zero.}
-
-\item{b1}{Slope coefficient for the independent variable (x).}
-
-\item{b2}{Slope coefficient for the moderator (w).}
-
-\item{b3}{Interaction coefficient between x and w.}
-
 \item{mean_x}{Mean value of the independent variable (x).}
 
 \item{var_x}{Variance of the independent variable (x).}
@@ -37,6 +29,14 @@ simple_slope(
 \item{legend_position}{Position of the legend. Options are: "UL" (inside upper left), "UR" (inside upper right), "BL" (inside bottom left), "BR" (inside bottom right), or "right" (default: outside center right).}
 
 \item{fontsize}{Base font size for the plot.}
+
+\item{b0}{Intercept of the outcome variable. Note: the default intercept is 0, which corresponds to the default identification in Mplus for latent outcomes. Adjust b0 according to your own model results. In manifest models, the intercept is usually non-zero.}
+
+\item{b1}{Slope coefficient for the independent variable (x).}
+
+\item{b2}{Slope coefficient for the moderator (w).}
+
+\item{b3}{Interaction coefficient between x and w.}
 }
 \value{
 A ggplot2 object representing the simple slope plot.
@@ -54,7 +54,7 @@ In practice, especially in manifest models, the intercept should often be non-ze
 \dontrun{
   # Example usage:
   set.seed(123)
-  p <- simple_slope(b0 = 1, b1 = 0.5, b2 = 0.3, b3 = 0.2,
+  p <- simple_slope(intercept = 1, b_x = 0.5, b_w = 0.3, b_int = 0.2,
                     mean_x = 0, var_x = 1,
                     mean_w = 0, var_w = 1,
                     legend_position = "UL", fontsize = 16)

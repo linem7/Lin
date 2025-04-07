@@ -25,7 +25,7 @@
 #' \dontrun{
 #'   # Example usage:
 #'   set.seed(123)
-#'   p <- simple_slope(b0 = 1, b1 = 0.5, b2 = 0.3, b3 = 0.2,
+#'   p <- simple_slope(intercept = 1, b_x = 0.5, b_w = 0.3, b_int = 0.2,
 #'                     mean_x = 0, var_x = 1,
 #'                     mean_w = 0, var_w = 1,
 #'                     legend_position = "UL", fontsize = 16)
@@ -33,9 +33,9 @@
 #' }
 #' @import ggplot2
 #' @export
-simple_slope <- function(b0 = 0, b1, b2, b3,
-                         mean_x, var_x,
-                         mean_w, var_w,
+simple_slope <- function(intercept = 0, b_x, b_w, b_int,
+                         mean_x = 0, var_x,
+                         mean_w = 0, var_w,
                          legend_position = "right",
                          fontsize = 12) {
   # Compute standard deviations
@@ -63,8 +63,8 @@ simple_slope <- function(b0 = 0, b1, b2, b3,
                        levels = c("M - 1SD", "Mean", "M + 1SD"))
 
   # Compute the predicted outcome using the moderated regression model:
-  # y = b0 + b1*x + b2*w + b3*x*w
-  df$y <- with(df, b0 + b1 * x + b2 * w + b3 * x * w)
+  # y = b0 + b_x*x + b_w*w + b_int*x*w
+  df$y <- with(df, b0 + b_x * x + b_w * w + b_int * x * w)
 
   # Determine legend position and justification based on the new argument.
   if (legend_position == "UL") {
