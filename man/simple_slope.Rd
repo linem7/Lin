@@ -2,62 +2,88 @@
 % Please edit documentation in R/simple_slope.R
 \name{simple_slope}
 \alias{simple_slope}
-\title{Simple Slope Plot Function}
+\title{Simple Slope Plot Based on MplusAutomation Output}
 \usage{
 simple_slope(
-  intercept = 0,
-  b_x,
-  b_w,
-  b_int,
+  model,
+  x,
+  w,
+  int,
+  y,
+  slp_l,
+  slp_h,
   mean_x = 0,
-  var_x,
   mean_w = 0,
-  var_w,
   legend_position = "right",
-  fontsize = 12
+  fontsize = 14
 )
 }
 \arguments{
-\item{mean_x}{Mean value of the independent variable (x).}
+\item{model}{An MplusAutomation model object containing parameters (typically output from `readModels()`).}
 
-\item{var_x}{Variance of the independent variable (x).}
+\item{x}{Name of the independent variable in Mplus output.}
 
-\item{mean_w}{Mean value of the moderator (w).}
+\item{w}{Name of the moderator variable.}
 
-\item{var_w}{Variance of the moderator (w).}
+\item{int}{Name of the interaction term (x*w).}
 
-\item{legend_position}{Position of the legend. Options are: "UL" (inside upper left), "UR" (inside upper right), "BL" (inside bottom left), "BR" (inside bottom right), or "right" (default: outside center right).}
+\item{y}{Name of the dependent variable.}
 
-\item{fontsize}{Base font size for the plot.}
+\item{slp_l}{Name of the parameter for the simple slope at low moderator value under model constraint (M - 1SD).}
 
-\item{b0}{Intercept of the outcome variable. Note: the default intercept is 0, which corresponds to the default identification in Mplus for latent outcomes. Adjust b0 according to your own model results. In manifest models, the intercept is usually non-zero.}
+\item{slp_h}{Name of the parameter for the simple slope at high moderator value  under model constraint (M + 1SD).}
 
-\item{b1}{Slope coefficient for the independent variable (x).}
+\item{mean_x}{Mean value of the independent variable (default = 0).}
 
-\item{b2}{Slope coefficient for the moderator (w).}
+\item{mean_w}{Mean value of the moderator (default = 0).}
 
-\item{b3}{Interaction coefficient between x and w.}
+\item{legend_position}{Position of the legend. Options are:
+\itemize{
+  \item `"UL"` = Upper Left inside plot,
+  \item `"UR"` = Upper Right inside plot,
+  \item `"BL"` = Bottom Left inside plot,
+  \item `"BR"` = Bottom Right inside plot,
+  \item `"right"` = Default, outside plot on right side.
+}}
+
+\item{fontsize}{Font size for the plot text (default = 14).}
 }
 \value{
-A ggplot2 object representing the simple slope plot.
+A ggplot2 object displaying the simple slope plot.
 }
 \description{
-This function generates a simple slope plot using ggplot2 for a moderated regression model.
+This function extracts model parameters from an MplusAutomation object and creates
+a simple slope plot for a moderated regression model:
 }
 \details{
-The function creates six points (two for each of three moderator levels: M - 1SD, Mean, and M + 1SD) and connects them with lines.
-You can change the title and axis names by modifying the \code{labs()} function within the code.
-Keep in mind that the default intercept (b0) is set to 0 in Mplus for latent outcome identification.
-In practice, especially in manifest models, the intercept should often be non-zero. Adjust b0 as needed.
+\deqn{y = b0 + b1*x + b2*w + b3*(x*w) + \varepsilon}
+
+It automatically retrieves regression coefficients, variances, and simple slopes
+at different moderator levels (mean, mean - 1SD, mean + 1SD), and generates a plot
+with annotated legend entries showing the slope estimates, standard errors, and p-values.
+
+
+The function extracts:
+\itemize{
+  \item The intercept from the \code{Intercepts} section.
+  \item The coefficients for the independent variable (x), moderator (w), and interaction (x*w) from the \code{y.ON} section.
+  \item The variances of x and w from the \code{Variances} section.
+  \item The simple slopes at M - 1SD and M + 1SD from the \code{New.Additional.Parameters} section.
+}
+
+The legend labels dynamically include the simple slope estimates, standard errors, and p-values, separated by a new line (`\\n`).
 }
 \examples{
 \dontrun{
-  # Example usage:
-  set.seed(123)
-  p <- simple_slope(intercept = 1, b_x = 0.5, b_w = 0.3, b_int = 0.2,
-                    mean_x = 0, var_x = 1,
-                    mean_w = 0, var_w = 1,
-                    legend_position = "UL", fontsize = 16)
-  print(p)
+# Example usage:
+simple_slope(model,
+             x = "x",
+             w = "w",
+             int = "int",
+             y = "y",
+             slp_h = "slp_hi",
+             slp_l = "slp_lo",
+             legend_position = "UL")
 }
+
 }

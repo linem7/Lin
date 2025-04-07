@@ -1,72 +1,132 @@
-#' Simple Slope Plot Function
+#' Simple Slope Plot Based on MplusAutomation Output
 #'
-#' This function generates a simple slope plot using ggplot2 for a moderated regression model.
+#' This function extracts model parameters from an MplusAutomation object and creates
+#' a simple slope plot for a moderated regression model:
 #'
-#' @param b0 Intercept of the outcome variable. Note: the default intercept is 0, which corresponds to the default identification in Mplus for latent outcomes. Adjust b0 according to your own model results. In manifest models, the intercept is usually non-zero.
-#' @param b1 Slope coefficient for the independent variable (x).
-#' @param b2 Slope coefficient for the moderator (w).
-#' @param b3 Interaction coefficient between x and w.
-#' @param mean_x Mean value of the independent variable (x).
-#' @param var_x Variance of the independent variable (x).
-#' @param mean_w Mean value of the moderator (w).
-#' @param var_w Variance of the moderator (w).
-#' @param legend_position Position of the legend. Options are: "UL" (inside upper left), "UR" (inside upper right), "BL" (inside bottom left), "BR" (inside bottom right), or "right" (default: outside center right).
-#' @param fontsize Base font size for the plot.
+#' \deqn{y = b0 + b1*x + b2*w + b3*(x*w) + \varepsilon}
+#'
+#' It automatically retrieves regression coefficients, variances, and simple slopes
+#' at different moderator levels (mean, mean - 1SD, mean + 1SD), and generates a plot
+#' with annotated legend entries showing the slope estimates, standard errors, and p-values.
+#'
+#' @param model An MplusAutomation model object containing parameters (typically output from `readModels()`).
+#' @param x Name of the independent variable in Mplus output.
+#' @param w Name of the moderator variable.
+#' @param int Name of the interaction term (x*w).
+#' @param y Name of the dependent variable.
+#' @param slp_l Name of the parameter for the simple slope at low moderator value under model constraint (M - 1SD).
+#' @param slp_h Name of the parameter for the simple slope at high moderator value  under model constraint (M + 1SD).
+#' @param mean_x Mean value of the independent variable (default = 0).
+#' @param mean_w Mean value of the moderator (default = 0).
+#' @param legend_position Position of the legend. Options are:
+#' \itemize{
+#'   \item `"UL"` = Upper Left inside plot,
+#'   \item `"UR"` = Upper Right inside plot,
+#'   \item `"BL"` = Bottom Left inside plot,
+#'   \item `"BR"` = Bottom Right inside plot,
+#'   \item `"right"` = Default, outside plot on right side.
+#' }
+#' @param fontsize Font size for the plot text (default = 14).
 #'
 #' @details
-#' The function creates six points (two for each of three moderator levels: M - 1SD, Mean, and M + 1SD) and connects them with lines.
-#' You can change the title and axis names by modifying the \code{labs()} function within the code.
-#' Keep in mind that the default intercept (b0) is set to 0 in Mplus for latent outcome identification.
-#' In practice, especially in manifest models, the intercept should often be non-zero. Adjust b0 as needed.
+#' The function extracts:
+#' \itemize{
+#'   \item The intercept from the \code{Intercepts} section.
+#'   \item The coefficients for the independent variable (x), moderator (w), and interaction (x*w) from the \code{y.ON} section.
+#'   \item The variances of x and w from the \code{Variances} section.
+#'   \item The simple slopes at M - 1SD and M + 1SD from the \code{New.Additional.Parameters} section.
+#' }
 #'
-#' @return A ggplot2 object representing the simple slope plot.
+#' The legend labels dynamically include the simple slope estimates, standard errors, and p-values, separated by a new line (`\\n`).
+#'
+#' @return A ggplot2 object displaying the simple slope plot.
 #'
 #' @examples
 #' \dontrun{
-#'   # Example usage:
-#'   set.seed(123)
-#'   p <- simple_slope(intercept = 1, b_x = 0.5, b_w = 0.3, b_int = 0.2,
-#'                     mean_x = 0, var_x = 1,
-#'                     mean_w = 0, var_w = 1,
-#'                     legend_position = "UL", fontsize = 16)
-#'   print(p)
+#' # Example usage:
+#' simple_slope(model,
+#'              x = "x",
+#'              w = "w",
+#'              int = "int",
+#'              y = "y",
+#'              slp_h = "slp_hi",
+#'              slp_l = "slp_lo",
+#'              legend_position = "UL")
 #' }
+#'
 #' @import ggplot2
 #' @export
-simple_slope <- function(intercept = 0, b_x, b_w, b_int,
-                         mean_x = 0, var_x,
-                         mean_w = 0, var_w,
+
+simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
+                         mean_x = 0, mean_w = 0,
                          legend_position = "right",
-                         fontsize = 12) {
+                         fontsize = 14) {
+  # Retrieve the unstandardized parameters data.frame from the model
+  params <- model[["parameters"]][["unstandardized"]]
+
+  # --- Extract regression coefficients ---
+  # Intercept: if found, use the "INT" row; otherwise default to 0
+  intercept_row <- subset(params, (paramHeader == "intercept" & param == toupper(y)))
+  b0 <- if (nrow(intercept_row) > 0) intercept_row$est[1] else 0
+
+  # Independent variable (iv) coefficient: search for "x" (default to 0)
+  iv_row <- subset(params, (paramHeader == paste0(toupper(y), ".ON") & param == toupper(x)))
+  b1 <- if (nrow(iv_row) > 0) iv_row$est[1] else 0
+
+
+  # Moderator coefficient: search for "w" (default to 0)
+  mod_row <- subset(params, (paramHeader == paste0(toupper(y), ".ON") & param == toupper(w)))
+  b2 <- if (nrow(mod_row) > 0) mod_row$est[1] else 0
+
+  # Interaction coefficient: search for "int" (default to 0)
+  intx_row <- subset(params, (paramHeader == paste0(toupper(y), ".ON") & param == toupper(int)))
+  b3 <- if (nrow(intx_row) > 0) intx_row$est[1] else 0
+
+  # --- Extract variances for x and w ---
+  varx_row <- subset(params, (paramHeader == "Variances" & param == toupper(x)))
+  varw_row <- subset(params, (paramHeader == "Variances" & param == toupper(w)))
+  var_x <- if(nrow(varx_row) > 0) varx_row$est[1] else 1
+  var_w <- if(nrow(varw_row) > 0) varw_row$est[1] else 1
+
+  # --- Retrieve simple slope labels ---
+  slp_l_row <- subset(params, (paramHeader == "New.Additional.Parameters" & param == toupper(slp_l)))
+  slp_h_row <- subset(params, (paramHeader == "New.Additional.Parameters" & param == toupper(slp_h)))
+
+  slp_lo <- if (nrow(slp_l_row) > 0) paste0("b = ", sprintf("%.3f", slp_l_row$est[1]), ", SE = ", sprintf("%.3f", slp_l_row$se[1]), ", p = ", sprintf("%.3f", slp_l_row$pval[1])) else ""
+  slp_mean <- if (nrow(iv_row) > 0) paste0("b = ", sprintf("%.3f", iv_row$est[1]), ", SE = ", sprintf("%.3f", iv_row$se[1]), ", p = ", sprintf("%.3f", iv_row$pval[1])) else ""
+  slp_hi <- if (nrow(slp_h_row) > 0) paste0("b = ", sprintf("%.3f", slp_h_row$est[1]), ", SE = ", sprintf("%.3f", slp_h_row$se[1]), ", p = ", sprintf("%.3f", slp_h_row$pval[1])) else ""
+
   # Compute standard deviations
   sd_x <- sqrt(var_x)
   sd_w <- sqrt(var_w)
 
-  # Define low and high values for the independent variable (x)
+  # --- Create data for plotting ---
+  # Define two x values: mean ± SD (using provided mean_x)
   x_low <- mean_x - sd_x
   x_high <- mean_x + sd_x
 
-  # Define moderator levels: low, mean, and high (w)
+  # Define three moderator levels: one SD below, at, and one SD above (using provided mean_w)
   w_low  <- mean_w - sd_w
   w_mean <- mean_w
   w_high <- mean_w + sd_w
 
-  # Create a data frame with six combinations:
-  # Two x-values for each of the three w-levels.
+  # Create a data frame: two x-values for each of the three moderator levels
   df <- data.frame(
     x = rep(c(x_low, x_high), times = 3),
     w = rep(c(w_low, w_mean, w_high), each = 2)
   )
 
-  # Create a factor for the moderator levels with clear labels
-  df$w_level <- factor(rep(c("M - 1SD", "Mean", "M + 1SD"), each = 2),
-                       levels = c("M - 1SD", "Mean", "M + 1SD"))
+  w_low_lable = paste0("M - 1SD", "\n", slp_lo)
+  w_mean_lable = paste0("Mean", "\n", slp_mean)
+  w_high_lable = paste0("M + 1SD", "\n", slp_hi)
 
-  # Compute the predicted outcome using the moderated regression model:
-  # y = b0 + b_x*x + b_w*w + b_int*x*w
-  df$y <- with(df, b0 + b_x * x + b_w * w + b_int * x * w)
+  df$w_level <- factor(rep(c(w_low_lable, w_mean_lable, w_high_lable), each = 2),
+                       levels = c(w_low_lable, w_mean_lable, w_high_lable))
 
-  # Determine legend position and justification based on the new argument.
+  # Compute predicted outcome using: y = b0 + b1*x + b2*w + b3*x*w
+  df$y <- with(df, b0 + b1 * x + b2 * w + b3 * x * w)
+
+  # --- Legend positioning ---
   if (legend_position == "UL") {
     leg_pos <- c(0.05, 0.95)
     leg_just <- c(0, 1)
@@ -80,12 +140,11 @@ simple_slope <- function(intercept = 0, b_x, b_w, b_int,
     leg_pos <- c(0.95, 0.05)
     leg_just <- c(1, 0)
   } else {
-    # Default outside at center right
-    leg_pos <- "right"
+    leg_pos <- "right"  # default: outside center right
     leg_just <- NULL
   }
 
-  # Create the ggplot: each moderator level gets its own line connecting the two x-values.
+  # --- Create ggplot ---
   p <- ggplot(df, aes(x = x, y = y, group = w_level,
                       linetype = w_level, shape = w_level)) +
     geom_line(size = 1) +
@@ -95,17 +154,12 @@ simple_slope <- function(intercept = 0, b_x, b_w, b_int,
          title = "Simple Slope Plot at Different Moderator Levels",
          linetype = "Moderator Level",
          shape = "Moderator Level") +
-    scale_linetype_manual(values = c("M - 1SD" = "solid",
-                                     "Mean"    = "dotted",
-                                     "M + 1SD" = "solid")) +
-    scale_shape_manual(values = c("M - 1SD" = 15,  # square
-                                  "Mean"    = 16,  # triangle
-                                  "M + 1SD" = 17)) +  # circle
     theme_classic(base_size = fontsize) +
-    theme(
-      legend.position = leg_pos,
-      legend.justification = leg_just
-    )
+    theme(text = element_text(family = "serif"),
+          legend.position = leg_pos,
+          legend.key.height = unit(2, "lines"),
+          legend.justification = leg_just,
+          legend.background = element_rect(fill = "white", color = "black"))
 
   return(p)
 }
