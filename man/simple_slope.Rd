@@ -15,6 +15,7 @@ simple_slope(
   mean_x = 0,
   mean_w = 0,
   legend_position = "right",
+  legend_name = "Moderator Level",
   fontsize = 14
 )
 }

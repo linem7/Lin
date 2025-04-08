@@ -60,6 +60,7 @@
 simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
                          mean_x = 0, mean_w = 0,
                          legend_position = "right",
+                         legend_name = "Moderator Level",
                          fontsize = 14) {
   # Retrieve the unstandardized parameters data.frame from the model
   params <- model[["parameters"]][["unstandardized"]]
@@ -152,8 +153,8 @@ simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
     labs(x = "Independent Variable (x)",
          y = "Predicted Outcome (y)",
          title = "Simple Slope Plot at Different Moderator Levels",
-         linetype = "Moderator Level",
-         shape = "Moderator Level") +
+         linetype = legend_name,
+         shape = legend_name) +
     theme_classic(base_size = fontsize) +
     theme(text = element_text(family = "serif"),
           legend.position = leg_pos,
