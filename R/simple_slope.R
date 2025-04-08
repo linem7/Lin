@@ -26,6 +26,7 @@
 #'   \item `"BR"` = Bottom Right inside plot,
 #'   \item `"right"` = Default, outside plot on right side.
 #' }
+#' @param legend_name The name of legend.
 #' @param fontsize Font size for the plot text (default = 14).
 #'
 #' @details

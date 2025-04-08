@@ -47,6 +47,8 @@ simple_slope(
   \item `"right"` = Default, outside plot on right side.
 }}
 
+\item{legend_name}{The name of legend.}
+
 \item{fontsize}{Font size for the plot text (default = 14).}
 }
 \value{
