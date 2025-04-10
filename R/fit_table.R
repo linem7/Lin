@@ -77,8 +77,8 @@ fit_table <- function(...,
     holder$Models[i] <- if("Filename" %in% names(summ)) summ$Filename[1] else NA
 
     # Primary chi-square and df values (if available)
-    holder$Chisq[i] <- if("ChiSqM_Value" %in% names(summ)) as.numeric(summ$ChiSqM_Value[1]) else NA
-    holder$df[i]    <- if("ChiSqM_DF"    %in% names(summ)) round(as.numeric(summ$ChiSqM_DF[1]), digits) else NA
+    holder$Chisq[i] <- if("ChiSqM_Value" %in% names(summ)) round(as.numeric(summ$ChiSqM_Value[1]), digits) else NA
+    holder$df[i]    <- if("ChiSqM_DF"    %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
 
     # Compute chisq/df if both chi-square and df are available and df != 0.
     if(!is.na(holder$Chisq[i]) && !is.na(holder$df[i]) && holder$df[i] != 0) {
@@ -88,16 +88,16 @@ fit_table <- function(...,
     }
 
     # Other fit indices
-    holder$CFI[i]   <- if("CFI"            %in% names(summ)) as.numeric(summ$CFI[1]) else NA
-    holder$TLI[i]   <- if("TLI"            %in% names(summ)) as.numeric(summ$TLI[1]) else NA
-    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) as.numeric(summ$RMSEA_Estimate[1]) else NA
-    holder$SRMR[i]  <- if("SRMR"           %in% names(summ)) as.numeric(summ$SRMR[1]) else NA
+    holder$CFI[i]   <- if("CFI"            %in% names(summ)) round(as.numeric(summ$CFI[1]), digits) else NA
+    holder$TLI[i]   <- if("TLI"            %in% names(summ)) round(as.numeric(summ$TLI[1]), digits) else NA
+    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) round(as.numeric(summ$RMSEA_Estimate[1]), digits) else NA
+    holder$SRMR[i]  <- if("SRMR"           %in% names(summ)) round(as.numeric(summ$SRMR[1]), digits) else NA
 
     # Information criteria and parameters (Parameters follows LL)
-    holder$LL[i]         <- if("LL"         %in% names(summ)) as.numeric(summ$LL[1]) else NA
-    holder$Parameters[i] <- if("Parameters" %in% names(summ)) round(as.numeric(summ$Parameters[1]), digits) else NA
-    holder$AIC[i]        <- if("AIC"        %in% names(summ)) as.numeric(summ$AIC[1]) else NA
-    holder$BIC[i]        <- if("BIC"        %in% names(summ)) as.numeric(summ$BIC[1]) else NA
+    holder$LL[i]         <- if("LL"         %in% names(summ)) round(as.numeric(summ$LL[1]), digits) else NA
+    holder$Parameters[i] <- if("Parameters" %in% names(summ)) as.numeric(summ$Parameters[1]) else NA
+    holder$AIC[i]        <- if("AIC"        %in% names(summ)) round(as.numeric(summ$AIC[1]), digits) else NA
+    holder$BIC[i]        <- if("BIC"        %in% names(summ)) round(as.numeric(summ$BIC[1]), digits) else NA
   }
 
   ## --- STEP 4: Compute difference metrics (if diffTest is TRUE) ---
