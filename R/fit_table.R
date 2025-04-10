@@ -77,27 +77,34 @@ fit_table <- function(...,
     holder$Models[i] <- if("Filename" %in% names(summ)) summ$Filename[1] else NA
 
     # Primary chi-square and df values (if available)
-    holder$Chisq[i] <- if("ChiSqM_Value" %in% names(summ)) round(as.numeric(summ$ChiSqM_Value[1]), digits) else NA
-    holder$df[i]    <- if("ChiSqM_DF"    %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
+    if("ChiSqM_Value" %in% names(summ)) {
+      # Format with sprintf to retain trailing zeros.
+      holder$Chisq[i] <- sprintf(paste0("%.", digits, "f"), as.numeric(summ$ChiSqM_Value[1]))
+    } else {
+      holder$Chisq[i] <- NA
+    }
+    holder$df[i]    <- if("ChiSqM_DF" %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
 
     # Compute chisq/df if both chi-square and df are available and df != 0.
-    if(!is.na(holder$Chisq[i]) && !is.na(holder$df[i]) && holder$df[i] != 0) {
-      holder[["chisq/df"]][i] <- holder$Chisq[i] / holder$df[i]
+    if(!is.na(summ$ChiSqM_Value[1]) && !is.na(summ$ChiSqM_DF[1]) && as.numeric(summ$ChiSqM_DF[1]) != 0) {
+      chisq_val <- as.numeric(summ$ChiSqM_Value[1])
+      df_val <- as.numeric(summ$ChiSqM_DF[1])
+      holder[["chisq/df"]][i] <- sprintf(paste0("%.", digits, "f"), chisq_val / df_val)
     } else {
       holder[["chisq/df"]][i] <- NA
     }
 
     # Other fit indices
-    holder$CFI[i]   <- if("CFI"            %in% names(summ)) round(as.numeric(summ$CFI[1]), digits) else NA
-    holder$TLI[i]   <- if("TLI"            %in% names(summ)) round(as.numeric(summ$TLI[1]), digits) else NA
-    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) round(as.numeric(summ$RMSEA_Estimate[1]), digits) else NA
-    holder$SRMR[i]  <- if("SRMR"           %in% names(summ)) round(as.numeric(summ$SRMR[1]), digits) else NA
+    holder$CFI[i]   <- if("CFI"            %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$CFI[1])) else NA
+    holder$TLI[i]   <- if("TLI"            %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$TLI[1])) else NA
+    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$RMSEA_Estimate[1])) else NA
+    holder$SRMR[i]  <- if("SRMR"           %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$SRMR[1])) else NA
 
     # Information criteria and parameters (Parameters follows LL)
-    holder$LL[i]         <- if("LL"         %in% names(summ)) round(as.numeric(summ$LL[1]), digits) else NA
+    holder$LL[i]         <- if("LL"         %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$LL[1])) else NA
     holder$Parameters[i] <- if("Parameters" %in% names(summ)) as.numeric(summ$Parameters[1]) else NA
-    holder$AIC[i]        <- if("AIC"        %in% names(summ)) round(as.numeric(summ$AIC[1]), digits) else NA
-    holder$BIC[i]        <- if("BIC"        %in% names(summ)) round(as.numeric(summ$BIC[1]), digits) else NA
+    holder$AIC[i]        <- if("AIC"        %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$AIC[1])) else NA
+    holder$BIC[i]        <- if("BIC"        %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$BIC[1])) else NA
   }
 
   ## --- STEP 4: Compute difference metrics (if diffTest is TRUE) ---
@@ -115,32 +122,39 @@ fit_table <- function(...,
       # Choose reference row based on 'ref'
       ref_row <- if(ref == "first") 1 else i - 1
 
-      # Compute differences for CFI, RMSEA, AIC, and BIC.
-      ΔCFI[i]   <- holder$CFI[i]   - holder$CFI[ref_row]
-      ΔRMSEA[i] <- holder$RMSEA[i] - holder$RMSEA[ref_row]
-      ΔAIC[i]   <- holder$AIC[i]   - holder$AIC[ref_row]
-      ΔBIC[i]   <- holder$BIC[i]   - holder$BIC[ref_row]
+      # Retrieve raw summaries for current and reference models.
+      summ_current <- as.data.frame(modelList[[i]][["summaries"]])
+      summ_ref     <- as.data.frame(modelList[[ref_row]][["summaries"]])
+
+      # Compute differences for CFI, RMSEA, AIC, and BIC using raw numeric values.
+      if("CFI" %in% names(summ_current) && "CFI" %in% names(summ_ref))
+        ΔCFI[i]   <- as.numeric(summ_current$CFI[1]) - as.numeric(summ_ref$CFI[1])
+      if("RMSEA_Estimate" %in% names(summ_current) && "RMSEA_Estimate" %in% names(summ_ref))
+        ΔRMSEA[i] <- as.numeric(summ_current$RMSEA_Estimate[1]) - as.numeric(summ_ref$RMSEA_Estimate[1])
+      if("AIC" %in% names(summ_current) && "AIC" %in% names(summ_ref))
+        ΔAIC[i]   <- as.numeric(summ_current$AIC[1]) - as.numeric(summ_ref$AIC[1])
+      if("BIC" %in% names(summ_current) && "BIC" %in% names(summ_ref))
+        ΔBIC[i]   <- as.numeric(summ_current$BIC[1]) - as.numeric(summ_ref$BIC[1])
 
       ## --- Chi-square difference ---
       # Use chi-square and df if available; otherwise, use LL-based approach.
-      if(!is.na(holder$Chisq[i]) && !is.na(holder$Chisq[ref_row]) &&
-         !is.na(holder$df[i]) && !is.na(holder$df[ref_row])) {
-        delta_chisq  <- holder$Chisq[i] - holder$Chisq[ref_row]
-        delta_df_val <- holder$df[i] - holder$df[ref_row]
-      } else if(!is.na(holder$LL[i]) && !is.na(holder$LL[ref_row]) &&
-                !is.na(holder$Parameters[i]) && !is.na(holder$Parameters[ref_row])) {
-        # Use LLCorrectionFactor if available; otherwise, use LL alone.
-        if(!is.null(modelList[[i]][["summaries"]][["LLCorrectionFactor"]]) &&
-           !is.null(modelList[[ref_row]][["summaries"]][["LLCorrectionFactor"]])) {
-          cf0 <- as.numeric(modelList[[ref_row]][["summaries"]][["LLCorrectionFactor"]][1])
-          cf1 <- as.numeric(modelList[[i]][["summaries"]][["LLCorrectionFactor"]][1])
-          cd <- (holder$Parameters[ref_row] * cf0 - holder$Parameters[i] * cf1) /
-            (holder$Parameters[ref_row] - holder$Parameters[i])
-          delta_chisq <- -2 * (holder$LL[ref_row] - holder$LL[i]) / cd
+      if("ChiSqM_Value" %in% names(summ_current) && "ChiSqM_Value" %in% names(summ_ref) &&
+         "ChiSqM_DF" %in% names(summ_current) && "ChiSqM_DF" %in% names(summ_ref)) {
+        delta_chisq  <- as.numeric(summ_current$ChiSqM_Value[1]) - as.numeric(summ_ref$ChiSqM_Value[1])
+        delta_df_val <- as.numeric(summ_current$ChiSqM_DF[1]) - as.numeric(summ_ref$ChiSqM_DF[1])
+      } else if("LL" %in% names(summ_current) && "LL" %in% names(summ_ref) &&
+                "Parameters" %in% names(summ_current) && "Parameters" %in% names(summ_ref)) {
+        if(!is.null(summ_current[["LLCorrectionFactor"]]) &&
+           !is.null(summ_ref[["LLCorrectionFactor"]])) {
+          cf0 <- as.numeric(summ_ref$LLCorrectionFactor[1])
+          cf1 <- as.numeric(summ_current$LLCorrectionFactor[1])
+          cd <- (as.numeric(summ_ref$Parameters[1]) * cf0 - as.numeric(summ_current$Parameters[1]) * cf1) /
+            (as.numeric(summ_ref$Parameters[1]) - as.numeric(summ_current$Parameters[1]))
+          delta_chisq <- -2 * (as.numeric(summ_ref$LL[1]) - as.numeric(summ_current$LL[1])) / cd
         } else {
-          delta_chisq <- -2 * (holder$LL[ref_row] - holder$LL[i])
+          delta_chisq <- -2 * (as.numeric(summ_ref$LL[1]) - as.numeric(summ_current$LL[1]))
         }
-        delta_df_val <- holder$Parameters[i] - holder$Parameters[ref_row]
+        delta_df_val <- as.numeric(summ_current$Parameters[1]) - as.numeric(summ_ref$Parameters[1])
       } else {
         delta_chisq  <- NA
         delta_df_val <- NA
@@ -148,16 +162,16 @@ fit_table <- function(...,
 
       ΔChisq[i] <- delta_chisq
       Δdf[i]    <- delta_df_val
-      p_ΔChisq[i] <- if(!is.na(delta_df_val) && delta_df_val > 0 && !is.na(delta_chisq)) {
-        1 - pchisq(delta_chisq, df = delta_df_val)
-      } else NA
+      p_val <- if(!is.na(delta_df_val) && delta_df_val > 0 && !is.na(delta_chisq))
+        1 - pchisq(delta_chisq, df = delta_df_val) else NA
+      p_ΔChisq[i] <- p_val
     }
 
-    ## Append the difference metrics to the holder.
-    holder[["ΔCFI"]]   <- ifelse(!is.na(ΔCFI), round(ΔCFI, digits), NA)
-    holder[["ΔRMSEA"]] <- ifelse(!is.na(ΔRMSEA), round(ΔRMSEA, digits), NA)
+    # Append formatted difference metrics to the holder.
+    holder[["ΔCFI"]] <- ifelse(!is.na(ΔCFI), sprintf(paste0("%.", digits, "f"), ΔCFI), NA)
+    holder[["ΔRMSEA"]] <- ifelse(!is.na(ΔRMSEA), sprintf(paste0("%.", digits, "f"), ΔRMSEA), NA)
     holder[["ΔChisq"]] <- ifelse(!is.na(ΔChisq) & !is.na(Δdf),
-                                 paste0(round(ΔChisq, digits), " (", round(Δdf, 0), ") ",
+                                 paste0(sprintf(paste0("%.", digits, "f"), ΔChisq), " (", sprintf("%d", round(Δdf)), ") ",
                                         sapply(p_ΔChisq, function(p) {
                                           if(is.na(p)) return("")
                                           else if(p < 0.001) return("***")
@@ -167,12 +181,12 @@ fit_table <- function(...,
                                           else return("")
                                         })),
                                  NA)
-    holder[["p_ΔChisq"]] <- ifelse(!is.na(p_ΔChisq), round(p_ΔChisq, digits), NA)
+    holder[["p_ΔChisq"]] <- ifelse(!is.na(p_ΔChisq), sprintf(paste0("%.", digits, "f"), p_ΔChisq), NA)
     if("AIC" %in% colnames(holder)) {
-      holder[["ΔAIC"]] <- ifelse(!is.na(ΔAIC), round(ΔAIC, digits), NA)
+      holder[["ΔAIC"]] <- ifelse(!is.na(ΔAIC), sprintf(paste0("%.", digits, "f"), ΔAIC), NA)
     }
     if("BIC" %in% colnames(holder)) {
-      holder[["ΔBIC"]] <- ifelse(!is.na(ΔBIC), round(ΔBIC, digits), NA)
+      holder[["ΔBIC"]] <- ifelse(!is.na(ΔBIC), sprintf(paste0("%.", digits, "f"), ΔBIC), NA)
     }
   }
 
@@ -187,8 +201,6 @@ fit_table <- function(...,
     extra_diff <- c()
     if("AIC" %in% indices) extra_diff <- c(extra_diff, "ΔAIC")
     if("BIC" %in% indices) extra_diff <- c(extra_diff, "ΔBIC")
-    # Also include any other indices provided that exist in to holder.
-    extra_change <- union(intersect(indices, colnames(holder)), extra_diff)
     fit_cols <- union(default_indices, indices)
     change_cols <- union(default_diff, extra_diff)
     final_cols <- union(fit_cols, change_cols)
@@ -201,3 +213,4 @@ fit_table <- function(...,
   rownames(final_holder) <- NULL
   return(final_holder)
 }
+
