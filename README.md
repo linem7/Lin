@@ -14,12 +14,8 @@ The goal of Lin is to provide some useful functions
 
 ``` r
 # Install from GitHub (if the repo is public)
-# install.packages("devtools")
-# devtools::install_github("linem7/Lin")
-```
-
-``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+install.packages("devtools")
+devtools::install_github("linem7/Lin")
 ```
 
 ## Example

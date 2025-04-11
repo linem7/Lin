@@ -83,29 +83,43 @@ fit_table <- function(...,
     } else {
       holder$Chisq[i] <- NA
     }
-    holder$df[i]    <- if("ChiSqM_DF" %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
+    holder$df[i] <- if("ChiSqM_DF" %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
 
-    # Compute chisq/df if both chi-square and df are available and df != 0.
-    if(!is.na(summ$ChiSqM_Value[1]) && !is.na(summ$ChiSqM_DF[1]) && as.numeric(summ$ChiSqM_DF[1]) != 0) {
-      chisq_val <- as.numeric(summ$ChiSqM_Value[1])
-      df_val <- as.numeric(summ$ChiSqM_DF[1])
-      holder[["chisq/df"]][i] <- sprintf(paste0("%.", digits, "f"), chisq_val / df_val)
-    } else {
-      holder[["chisq/df"]][i] <- NA
+    # Compute chisq/df if both chi-square and df are available.
+    {
+      chisq_raw <- if("ChiSqM_Value" %in% names(summ)) summ$ChiSqM_Value[1] else NA
+      df_raw    <- if("ChiSqM_DF" %in% names(summ)) summ$ChiSqM_DF[1] else NA
+
+      chisq_val <- suppressWarnings(as.numeric(as.character(chisq_raw)))
+      df_val    <- suppressWarnings(as.numeric(as.character(df_raw)))
+
+      if (!is.na(chisq_val) && !is.na(df_val)) {
+        # Handle zero degrees of freedom
+        if (df_val == 0) {
+          # If both chisq and df are zero, ratio is 0; otherwise, Inf.
+          ratio <- if (chisq_val == 0) 0 else Inf
+        } else {
+          ratio <- chisq_val / df_val
+        }
+        holder[["chisq/df"]][i] <- sprintf(paste0("%.", digits, "f"), ratio)
+      } else {
+        holder[["chisq/df"]][i] <- NA
+      }
     }
 
     # Other fit indices
-    holder$CFI[i]   <- if("CFI"            %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$CFI[1])) else NA
-    holder$TLI[i]   <- if("TLI"            %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$TLI[1])) else NA
+    holder$CFI[i]   <- if("CFI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$CFI[1])) else NA
+    holder$TLI[i]   <- if("TLI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$TLI[1])) else NA
     holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$RMSEA_Estimate[1])) else NA
-    holder$SRMR[i]  <- if("SRMR"           %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$SRMR[1])) else NA
+    holder$SRMR[i]  <- if("SRMR" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$SRMR[1])) else NA
 
     # Information criteria and parameters (Parameters follows LL)
-    holder$LL[i]         <- if("LL"         %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$LL[1])) else NA
+    holder$LL[i]         <- if("LL" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$LL[1])) else NA
     holder$Parameters[i] <- if("Parameters" %in% names(summ)) as.numeric(summ$Parameters[1]) else NA
-    holder$AIC[i]        <- if("AIC"        %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$AIC[1])) else NA
-    holder$BIC[i]        <- if("BIC"        %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$BIC[1])) else NA
+    holder$AIC[i]        <- if("AIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$AIC[1])) else NA
+    holder$BIC[i]        <- if("BIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$BIC[1])) else NA
   }
+
 
   ## --- STEP 4: Compute difference metrics (if diffTest is TRUE) ---
   if(diffTest && n > 1) {
