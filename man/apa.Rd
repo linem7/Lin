@@ -2,26 +2,45 @@
 % Please edit documentation in R/apa.R
 \name{apa}
 \alias{apa}
-\title{APA a table}
+\title{Create an APA-Style Table}
 \usage{
 apa(x, title = NULL, notes = NULL, digits = 3)
 }
 \arguments{
-\item{x}{data.frame}
+\item{x}{A \code{data.frame}. The data to be formatted as a table.}
 
-\item{title}{title of table}
+\item{title}{\code{character}. Optional. The title (caption) of the table.}
 
-\item{notes}{footnote of table}
+\item{notes}{\code{character}. Optional. Footnote text to display below the table.}
 
-\item{digits}{digits of the value within the table}
+\item{digits}{\code{integer}. Number of decimal places to display for numeric columns. Default is 3.}
 }
 \value{
-a data.frame
+An object of class \code{kableExtra}, representing the formatted table. Typically rendered in RMarkdown or HTML output.
 }
 \description{
-Using kable and kable_classic to create a apa format table
+Formats a data frame as an APA-style table using \code{kable} and \code{kable_classic}.
+Optionally adds a title and footnote, and controls the number of displayed digits.
+}
+\details{
+This function uses \code{knitr::kable()} to create a table and \code{kableExtra::kable_classic()} to apply APA-style formatting.
+A footnote can be added using \code{kableExtra::footnote()}.
 }
 \examples{
-# Format the first few rows of mtcars as an APA style table
-apa(head(mtcars, 5), title = "Descriptive Statistics for mtcars Sample")
+# Example 1: Format the first five rows of mtcars as an APA-style table
+apa(
+  head(mtcars, 5),
+  title = "Descriptive Statistics for mtcars Sample",
+  notes = "Note. Data are from the mtcars dataset.",
+  digits = 2
+)
+
+# Example 2: Format iris summary statistics
+apa(
+  summary(iris),
+  title = "Summary Statistics for Iris Dataset",
+  notes = "Note. Classic Fisher's iris data.",
+  digits = 1
+)
+
 }

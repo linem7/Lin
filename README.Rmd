@@ -1,5 +1,6 @@
 ---
 output: github_document
+always_allow_html: true
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -28,13 +29,38 @@ install.packages("devtools")
 devtools::install_github("linem7/Lin")
 ```
 
-## Example
+## Examples
+### Packages and working directory
+```{r, message=FALSE}
+library(bruceR)
+library(MplusAutomation)
+library(knitr)
+library(Lin)
+library(webshot2)
 
+set.wd()
+```
+### Mplus result demostration
+```{r}
+models <- readModels("./inst/extdata") # Change the location where your data is.
+```
+
+```{r}
+# Print model fit for comparison
+fit_table(models, ref = "last", indices = c("AIC")) %>% apa(title = "Table 1. Model comparison.")
+```
+
+```{r}
+# Print coefficients
+# coeff_table(models, model_names = paste0("Models ", 1:4))
+```
+
+### Retieve data lables
 This is a basic example which shows you how to solve a common problem:
 
 ```{r example}
 # Load the package (assuming it's installed or you're in development mode)
-library(Lin)
+
 library(tibble)
 
 df <- tibble(
