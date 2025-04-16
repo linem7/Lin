@@ -20,6 +20,48 @@ classify_param <- function(paramHeader, param) {
   }
 }
 
+# Create three parts for the formula (LHS, operator, RHS) using lavaan syntax.
+create_formula_parts <- function(paramHeader, param) {
+  # Loading: latent variable definition
+  if (grepl("\\.BY$", paramHeader)) {
+    lhs <- sub("\\.BY$", "", paramHeader)
+    op <- "=~"
+    rhs <- param
+  } else if (grepl("\\.ON$", paramHeader)) {
+    lhs <- sub("\\.ON$", "", paramHeader)
+    # For intercepts from regression, if the predictor is "Constant", treat as intercept
+    if (tolower(param) == "constant") {
+      op <- "~ 1"
+      rhs <- ""
+    } else {
+      op <- "~"
+      rhs <- param
+    }
+  } else if (grepl("\\.WITH$", paramHeader)) {
+    lhs <- sub("\\.WITH$", "", paramHeader)
+    op <- "~~"
+    rhs <- param
+  } else if (paramHeader %in% c("Intercepts", "Means", "Mean")) {
+    lhs <- param      # variable name in the 'param' column
+    op <- "~ 1"
+    rhs <- ""
+  } else if (paramHeader %in% c("Variances", "Residual.Variances")) {
+    lhs <- param      # variance: variable appears on both sides
+    op <- "~~"
+    rhs <- param
+  } else if (paramHeader == "New.Additional.Parameters") {
+    lhs <- "new"
+    op <- ":="
+    rhs <- param
+  } else {
+    # Default fallback: just combine what is there.
+    lhs <- paramHeader
+    op <- ""
+    rhs <- param
+  }
+  return(c(lhs = lhs, op = op, rhs = rhs))
+}
+
 #' Generate a Regression Coefficient Table with Fit Indices
 #'
 #' @description
