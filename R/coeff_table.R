@@ -1,3 +1,6 @@
+
+
+# --- Helper Functions ---
 # Classify the parameter type based on paramHeader and param.
 classify_param <- function(paramHeader, param) {
   if (grepl("\\.BY$", paramHeader)) {
@@ -61,6 +64,14 @@ create_formula_parts <- function(paramHeader, param) {
   }
   return(c(lhs = lhs, op = op, rhs = rhs))
 }
+
+# Format numbers using sprintf. Returns a character vector.
+fmt_num <- function(x, digits) {
+  ifelse(is.na(x), NA_character_, sprintf(paste0("%.", digits, "f"), x))
+}
+
+
+# --- Main Function: coeff_table ---
 
 #' Generate a Regression Coefficient Table with Fit Indices
 #'
