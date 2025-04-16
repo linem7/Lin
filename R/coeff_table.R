@@ -70,7 +70,6 @@ fmt_num <- function(x, digits) {
   ifelse(is.na(x), NA_character_, sprintf(paste0("%.", digits, "f"), x))
 }
 
-
 # --- Main Function: coeff_table ---
 
 #' Generate a Regression Coefficient Table with Fit Indices
