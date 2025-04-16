@@ -1,3 +1,25 @@
+# Classify the parameter type based on paramHeader and param.
+classify_param <- function(paramHeader, param) {
+  if (grepl("\\.BY$", paramHeader)) {
+    return("loading")
+  } else if (grepl("\\.ON$", paramHeader)) {
+    if (tolower(param) == "constant")
+      return("expectation")
+    else
+      return("regression")
+  } else if (grepl("\\.WITH$", paramHeader)) {
+    return("undirected")
+  } else if (paramHeader %in% c("Intercepts", "Means", "Mean")) {
+    return("expectation")
+  } else if (paramHeader %in% c("Variances", "Residual.Variances")) {
+    return("variability")
+  } else if (paramHeader == "New.Additional.Parameters") {
+    return("new")
+  } else {
+    return("other")
+  }
+}
+
 #' Generate a Regression Coefficient Table with Fit Indices
 #'
 #' @description
