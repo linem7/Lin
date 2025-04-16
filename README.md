@@ -35,7 +35,7 @@ set.wd()
 ### Mplus result demostration
 
 ``` r
-models <- readModels("./inst/extdata") # Change the location where your data is.
+models <- readModels("./inst/extdata") # Using the data from Mplus offcial site.
 ```
 
 ``` r
