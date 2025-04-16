@@ -258,7 +258,7 @@ coeff_table <- function(...,
     if (length(exclude) > 0) {
       # Create a regex pattern that matches any of the exclude strings.
       pattern <- paste(exclude, collapse = "|")
-      coeffs <- coeffs[ !grepl(pattern, coeffs$rhs, ignore.case = TRUE), ]
+      coeffs <- coeffs[ !grepl(pattern, coeffs$rhs, ignore.case = TRUE, perl = TRUE), ]
     }
 
     p_orig <- as.numeric(coeffs$p)
