@@ -1,400 +1,300 @@
-
-
-# --- Helper Functions ---
-# Classify the parameter type based on paramHeader and param.
-classify_param <- function(paramHeader, param) {
-  if (grepl("\\.BY$", paramHeader)) {
-    return("loading")
-  } else if (grepl("\\.ON$", paramHeader)) {
-    if (tolower(param) == "constant")
-      return("expectation")
-    else
-      return("regression")
-  } else if (grepl("\\.WITH$", paramHeader)) {
-    return("undirected")
-  } else if (paramHeader %in% c("Intercepts", "Means", "Mean")) {
-    return("expectation")
-  } else if (paramHeader %in% c("Variances", "Residual.Variances")) {
-    return("variability")
-  } else if (paramHeader == "New.Additional.Parameters") {
-    return("new")
-  } else {
-    return("other")
-  }
-}
-
-# Create three parts for the formula (LHS, operator, RHS) using lavaan syntax.
-create_formula_parts <- function(paramHeader, param) {
-  # Loading: latent variable definition
-  if (grepl("\\.BY$", paramHeader)) {
-    lhs <- sub("\\.BY$", "", paramHeader)
-    op <- "=~"
-    rhs <- param
-  } else if (grepl("\\.ON$", paramHeader)) {
-    lhs <- sub("\\.ON$", "", paramHeader)
-    # For intercepts from regression, if the predictor is "Constant", treat as intercept
-    if (tolower(param) == "constant") {
-      op <- "~ 1"
-      rhs <- ""
-    } else {
-      op <- "~"
-      rhs <- param
-    }
-  } else if (grepl("\\.WITH$", paramHeader)) {
-    lhs <- sub("\\.WITH$", "", paramHeader)
-    op <- "~~"
-    rhs <- param
-  } else if (paramHeader %in% c("Intercepts", "Means", "Mean")) {
-    lhs <- param      # variable name in the 'param' column
-    op <- "~ 1"
-    rhs <- ""
-  } else if (paramHeader %in% c("Variances", "Residual.Variances")) {
-    lhs <- param      # variance: variable appears on both sides
-    op <- "~~"
-    rhs <- param
-  } else if (paramHeader == "New.Additional.Parameters") {
-    lhs <- "new"
-    op <- ":="
-    rhs <- param
-  } else {
-    # Default fallback: just combine what is there.
-    lhs <- paramHeader
-    op <- ""
-    rhs <- param
-  }
-  return(c(lhs = lhs, op = op, rhs = rhs))
-}
-
-# Format numbers using sprintf. Returns a character vector.
-fmt_num <- function(x, digits) {
-  ifelse(is.na(x), NA_character_, sprintf(paste0("%.", digits, "f"), x))
-}
-
-# --- Main Function: coeff_table ---
-
-#' Generate a Regression Coefficient Table with Fit Indices
+#' Generate a Regression‑Coefficient Table with Model‑Fit Indices
+#'
+#' @title Regression Coefficient Table (Mplus ⇢ HTML)
 #'
 #' @description
-#' This function generates a formatted table displaying regression coefficients and model fit indices
-#' for one or multiple model objects. These model objects are typically created by the
-#' \pkg{MpluAutomation} package, for example via the \code{readModels()} function or as lists returned
-#' by the \code{extractModelSummaries()} function. The output table is formatted using
-#' \code{knitr::kable} and enhanced with \code{kableExtra} functions.
+#' `coeff_table()` ingests one or more model objects produced by
+#' **\pkg{MplusAutomation}** (e.g., via [readModels()] or
+#' [extractModelSummaries()]) and outputs a publication‑ready HTML table that
+#' combines regression coefficients and model‑fit indices.  The result is a
+#' **\pkg{kableExtra}** object that can be used directly in R Markdown, Quarto,
+#' or Shiny.
 #'
-#' @param ... One or more model objects or nested lists of model objects from the
-#' \pkg{MpluAutomation} package.
-#' @param stat Character vector specifying which statistics to include. The default is
-#' \code{c("est", "se", "p")}. Valid options include \code{"est"}, \code{"se"}, \code{"p"}, and \code{"z"}.
-#' Setting \code{stat = "all"} will include all four statistics: \code{"est"}, \code{"se"}, \code{"z"}, and \code{"p"}.
-#' @param indices Additional names of model fit indices to include.
-#' @param digits_coeff Integer specifying the number of decimal places for coefficient values (default: 3).
-#' @param digits_fit Integer specifying the number of decimal places for fit indices (default: 3).
-#' @param standardized Logical; if \code{TRUE}, standardized coefficients (from \code{stdyx.standardized}) are used,
-#' otherwise unstandardized coefficients are used (default: \code{FALSE}).
-#' @param params Character vector indicating which parameter types to include (default: \code{c("regression")}).
-#' @param model_names Optional character vector providing names for the models. If \code{NULL}, names are extracted
-#' from the model's summary information (e.g., from \code{Filename}) or default names are assigned.
-#' @param stars Logical; if \code{TRUE}, significance stars are appended to coefficient estimates based on p-value thresholds.
-#' @param title Character string for the table caption (default: \code{"Table X. Unstandardized Regression Coefficients and Model Fit Indices."}).
-#' @param notes Character string note to be added as a table footnote (default: \code{"Unstandardized coefficients are reported."}).
-#' @param exclude Character vector of substrings; any rows containing these substrings in the right-hand side (RHS)
-#' of the model equation will be excluded.
-#' @param order_by Character value (\code{"lhs"} or \code{"rhs"}) indicating whether to order the rows by the left-hand
-#' side or right-hand side of the equation (default: \code{"lhs"}).
+#' @param ...          One or more Mplus model objects *or* nested lists of such
+#'                     objects.
+#' @param stat         Character vector of coefficient statistics to display;
+#'                     defaults to `c("est", "se", "p")`.  Use `"all"` for all
+#'                     four statistics (est, se, z, p).
+#' @param indices      Extra fit indices to add (e.g., `"AIC"`, `"BIC"`).
+#' @param digits_coeff Decimal precision for coefficients (default `3`).
+#' @param digits_fit   Decimal precision for fit indices (default `3`).
+#' @param standardized Logical; if `TRUE`, use `stdyx.standardized` values.
+#' @param params       Which parameter classes to keep (e.g., `"regression"`).
+#' @param model_names  Optional vector of display names for models.
+#' @param stars        Logical; append significance stars when `TRUE`.
+#' @param title,notes  Caption and foot‑note strings.
+#' @param exclude      Regex patterns: rows whose *rhs* matches are dropped.
+#' @param order_by     Either `"lhs"` (default) or `"rhs"` for row ordering.
+#' @param annotations  Either `NULL`, a `data.frame`, or a named `list` that
+#'                     defines extra annotation columns (see Details).
+#' @param full_width   Passed to [kableExtra::kable_classic()].
 #'
-#' @details
-#' The function is designed to work with model objects produced by the \pkg{MpluAutomation} package. It supports:
-#'
-#' \itemize{
-#'   \item{\strong{Single model objects:} Directly pass a model created by \code{readModels()}.}
-#'   \item{\strong{Complex model lists:} Pass a list of models, such as those returned by \code{extractModelSummaries()}.}
-#'   \item{\strong{Combined input:} Mix individual model objects and nested lists of models. The function flattens the input
-#'         for consistent processing.}
-#' }
-#'
-#' Internally, helper functions such as \code{fmt_num()}, \code{classify_param()}, and
-#' \code{create_formula_parts()} (which should be imported or defined in your environment) are used to format numbers,
-#' classify parameters, and construct equation parts respectively.
-#'
-#' @return A formatted table (using \code{knitr::kable} and \code{kableExtra}) displaying the regression coefficients,
-#' corresponding significance levels (with optional star markings), and model fit indices.
-#'
-#' @seealso \code{\link{readModels}}, \code{\link{extractModelSummaries}}, \code{knitr::kable}, \code{kableExtra::kable_classic}
+#' @return A **kableExtra** HTML table.
 #'
 #' @examples
 #' \dontrun{
-#' # Example 1: Single model object from MpluAutomation
-#' model_single <- readModels("model_file.out")
-#' coeff_table(model_single)
+#' ## Single model
+#' m1 <- MplusAutomation::readModels("cfa.out")
+#' coeff_table(m1)
 #'
-#' # Example 2: Complex model list returned by extractModelSummaries
-#' model_list <- extractModelSummaries("models_directory")
-#' coeff_table(model_list)
+#' ## Multiple models with labels & extra indices
+#' mods <- MplusAutomation::readModels("sem_dir/")
+#' coeff_table(mods, model_names = c("Base", "Mediated"), indices = c("AIC", "BIC"))
 #'
-#' # Example 3: Combined input with an individual model and a nested model list
-#' model_extra <- readModels("another_model.out")
-#' models_combined <- list(model_set = extractModelSummaries("other_models_folder"))
-#' coeff_table(model_extra, models_combined)
+#' ## With annotation columns
+#' coeff_table(mods$model1, mods$model2,
+#'             annotations = list(Type = c("Father→Father", rep("", 7))),
+#'             stars = TRUE)
 #' }
 #'
 #' @import knitr
-#' @importFrom dplyr bind_rows
-#' @importFrom kableExtra kable_classic add_header_above row_spec footnote
-#'
+#' @importFrom dplyr bind_rows full_join
+#' @importFrom magrittr %>%
 #' @export
-
 coeff_table <- function(...,
                         stat = c("est", "se", "p"),
                         indices = character(0),
                         digits_coeff = 3,
-                        digits_fit = 3,
+                        digits_fit   = 3,
                         standardized = FALSE,
-                        params = c("regression"),
-                        model_names = NULL,
-                        stars = FALSE,
-                        title = "Table X. Unstandardized Regression Coefficients and Model Fit Indices.",
-                        notes = "Unstandardized coefficients are reported.",
-                        exclude = character(0),      # Rows with these substrings in RHS will be filtered out.
-                        order_by = c("lhs", "rhs")     # Choose ordering by left-hand side or right-hand side.
-) {
+                        params       = c("regression"),
+                        model_names  = NULL,
+                        stars        = FALSE,
+                        title        = "Table X. Unstandardized Regression Coefficients and Model Fit Indices.",
+                        notes        = "Unstandardized coefficients are reported.",
+                        exclude      = character(0),
+                        order_by     = c("lhs", "rhs"),
+                        annotations  = NULL,
+                        full_width   = FALSE) {
+  if (length(stat) == 1 && stat == "all") stat <- c("est","se","z","p")
 
-  # If stat is set to "all", include all statistics: est, se, z and p.
-  if (length(stat) == 1 && stat == "all") {
-    stat <- c("est", "se", "z", "p")
-  }
-
-  ## --- Helper for star assignment ---
   add_stars <- function(est, p) {
-    stars_chr <- ifelse(
-      is.na(p), "",
-      ifelse(p < 0.001, "***",
-             ifelse(p < 0.01,  "**",
-                    ifelse(p < 0.05,  "*", ""))))
+    stars_chr <- ifelse(is.na(p), "",
+                        ifelse(p < 0.001, "***",
+                               ifelse(p < 0.01,  "**",
+                                      ifelse(p < 0.05,  "*", ""))))
     paste0(est, stars_chr)
   }
 
-  ## --- Helper to recursively flatten a complex list of models ---
   flatten_models <- function(x, parent_name = NULL) {
     flat <- list()
-    if (is.list(x)) {
-      if ("summaries" %in% names(x)) {
-        nm <- parent_name
-        if (is.null(nm)) nm <- "model"
-        result <- list(x)
-        names(result) <- nm
-        return(result)
-      } else {
-        for (i in seq_along(x)) {
-          nm <- names(x)[i]
-          if (is.null(nm) || nm == "") nm <- paste0("Model", i)
-          flat <- c(flat, flatten_models(x[[i]], nm))
-        }
+    if (is.list(x) && !is.null(x$summaries)) {
+      nm <- parent_name %||% "model"
+      setNames(list(x), nm)
+    } else if (is.list(x)) {
+      for (i in seq_along(x)) {
+        nm <- names(x)[i] %||% paste0("Model", i)
+        flat <- c(flat, flatten_models(x[[i]], nm))
       }
-    }
-    return(flat)
-  }
-
-  ## --- STEP 1: Flatten input objects into a list of models ---
-  args <- list(...)
-  modelList <- list()
-  for (obj in args) {
-    modelList <- c(modelList, flatten_models(obj))
-  }
-  if (length(modelList) == 0) {
-    stop("No valid model objects were found in the input.")
-  }
-
-  ## --- Determine model names ---
-  if (is.null(model_names)) {
-    model_names <- sapply(modelList, function(m) {
-      if (!is.null(m$summaries$Filename) && nzchar(m$summaries$Filename)) {
-        return(m$summaries$Filename)
-      } else {
-        return(NA_character_)
-      }
-    })
-    missing <- which(is.na(model_names) | model_names == "")
-    if (length(missing) > 0) {
-      model_names[missing] <- paste0("Model ", missing)
+      flat
+    } else {
+      list()
     }
   }
-  if (length(model_names) != length(modelList)) {
-    model_names <- paste0("Model ", seq_len(length(modelList)))
-  }
+
+  args      <- list(...)
+  modelList <- unlist(lapply(args, flatten_models), recursive = FALSE)
+  if (length(modelList) == 0) stop("No valid model objects were found in the input.")
+
+  ## ── NEW ──
+  ann_cols <- if (!is.null(annotations)) names(annotations) else character(0)
 
   num_models <- length(modelList)
-  model_tables <- list()
-  fit_list <- list()
+
+  # determine model_names
+  if (is.null(model_names)) {
+    model_names <- vapply(modelList, function(m) {
+      fn <- m$summaries$Filename[1] %||% ""
+      if (nzchar(fn)) fn else NA_character_
+    }, character(1))
+    miss <- which(is.na(model_names))
+    if (length(miss)>0) model_names[miss] <- paste0("Model ", miss)
+  } else if (length(model_names) != num_models) {
+    warning(sprintf("Length of model_names (%d) does not match number of models (%d); using default names.",
+                    length(model_names), num_models))
+    model_names <- paste0("Model ", seq_len(num_models))
+  }
+
+  model_tables <- vector("list", num_models)
+  fit_list     <- vector("list", num_models)
 
   for (i in seq_len(num_models)) {
-    mod_flat <- modelList[[i]]
-    if (standardized) {
-      if (!is.null(mod_flat$parameters$stdyx.standardized)) {
-        coeffs <- mod_flat$parameters$stdyx.standardized
-      } else {
-        stop(sprintf("Standardized results requested but not found for model %d. Processing stopped.", i))
-      }
+    mod   <- modelList[[i]]
+    coeffs <- if (standardized) {
+      mod$parameters$stdyx.standardized %||%
+        stop(sprintf("No standardized results for model %d", i))
     } else {
-      coeffs <- mod_flat$parameters$unstandardized
+      mod$parameters$unstandardized
     }
-
-    required_cols <- c("paramHeader", "param", "est", "se", "pval", "est_se")
-    if (!all(required_cols %in% colnames(coeffs))) {
-      stop("Coefficient data missing one or more required columns: ",
-           paste(required_cols, collapse = ", "))
-    }
-    if (!"p" %in% colnames(coeffs) && "pval" %in% colnames(coeffs)) {
-      names(coeffs)[names(coeffs) == "pval"] <- "p"
-    }
+    req_cols <- c("paramHeader","param","est","se","pval","est_se")
+    if (!all(req_cols %in% names(coeffs)))
+      stop("Coefficient data missing columns: ", paste(setdiff(req_cols,names(coeffs)), collapse=","))
+    if (!"p" %in% names(coeffs)) names(coeffs)[names(coeffs)=="pval"] <- "p"
 
     coeffs$ptype <- mapply(classify_param, coeffs$paramHeader, coeffs$param)
-    coeffs <- coeffs[coeffs$ptype %in% params, ]
+    coeffs       <- coeffs[coeffs$ptype %in% params, , drop=FALSE]
 
-    formula_parts <- t(mapply(create_formula_parts, coeffs$paramHeader, coeffs$param))
-    formula_parts <- as.data.frame(formula_parts, stringsAsFactors = FALSE)
-    coeffs <- cbind(formula_parts, coeffs)
+    parts <- t(mapply(create_formula_parts, coeffs$paramHeader, coeffs$param,
+                      SIMPLIFY=TRUE, USE.NAMES=FALSE))
+    parts <- as.data.frame(parts, stringsAsFactors=FALSE)
+    coeffs <- cbind(parts, coeffs)
 
-    ## --- Exclusion Filtering ---
-    if (length(exclude) > 0) {
-      # Create a regex pattern that matches any of the exclude strings.
-      pattern <- paste(exclude, collapse = "|")
-      coeffs <- coeffs[ !grepl(pattern, coeffs$rhs, ignore.case = TRUE, perl = TRUE), ]
+    # exclude rows
+    if (length(exclude)>0) {
+      pat <- paste(exclude, collapse="|")
+      coeffs <- coeffs[!grepl(pat, coeffs$rhs, ignore.case=TRUE), ]
     }
 
-    p_orig <- as.numeric(coeffs$p)
-    if ("est" %in% stat)  coeffs$est <- fmt_num(coeffs$est, digits_coeff)
-    if ("se" %in% stat)   coeffs$se  <- fmt_num(coeffs$se, digits_coeff)
-    if ("z" %in% stat)    coeffs$z   <- fmt_num(coeffs$est_se, digits_coeff)
-    if ("p" %in% stat) {
-      coeffs$p <- ifelse(p_orig < 0.001,
-                         "<0.001",
-                         fmt_num(p_orig, digits_coeff))
-    }
-    if (stars && "est" %in% stat) {
-      coeffs$est <- add_stars(coeffs$est, p_orig)
-    }
+    pvals <- as.numeric(coeffs$p)
+    if ("est" %in% stat) coeffs$est <- fmt_num(as.numeric(coeffs$est), digits_coeff)
+    if ("se"  %in% stat) coeffs$se  <- fmt_num(as.numeric(coeffs$se),  digits_coeff)
+    if ("z"   %in% stat) coeffs$z   <- fmt_num(as.numeric(coeffs$est_se), digits_coeff)
+    if ("p"   %in% stat) coeffs$p   <- ifelse(pvals<0.001, "<0.001", fmt_num(pvals, digits_coeff))
+    if (stars && "est"%in%stat) coeffs$est <- add_stars(coeffs$est, pvals)
 
-    for (s in stat) {
-      original_name <- s
-      new_name <- paste0("M", i, "_", s)
-      names(coeffs)[names(coeffs) == original_name] <- new_name
-    }
+    # rename stat columns
+    for (s in stat) names(coeffs)[names(coeffs)==s] <- paste0("M",i,"_",s)
 
-    expected_coef_cols <- c("lhs", "op", "rhs", paste0("M", i, "_", stat))
-    if (nrow(coeffs) == 0) {
-      coeffs <- data.frame(matrix(ncol = length(expected_coef_cols), nrow = 0),
-                           stringsAsFactors = FALSE)
-      colnames(coeffs) <- expected_coef_cols
-    } else {
-      coeffs <- coeffs[, expected_coef_cols, drop = FALSE]
-    }
+    # keep only needed
+    coef_cols <- paste0("M",i,"_",stat)
+    tab_cols  <- c("lhs","op","rhs", coef_cols)
+    if (nrow(coeffs)==0) coeffs <- setNames(data.frame(matrix(ncol=length(tab_cols), nrow=0)), tab_cols)
+    else coeffs <- coeffs[, tab_cols, drop=FALSE]
     model_tables[[i]] <- coeffs
 
-    ## --- Process fit indices ---
-    summ <- mod_flat$summaries
-    default_indices <- c("ChiSqM_Value", "ChiSqM_DF", "χ²/df", "CFI", "TLI", "RMSEA_Estimate", "SRMR")
-    all_indices <- unique(c(default_indices, indices))
+    ## --- Fit indices ----------------------------------------------------
+    summ        <- mod$summaries
+    default_ix  <- c("ChiSqM_Value","ChiSqM_DF","χ²/df","CFI","TLI",
+                     "RMSEA_Estimate","SRMR")
+    all_ix      <- unique(c(default_ix, indices))
 
-    rename_map <- c(
-      "ChiSqM_Value"   = "χ²",
-      "ChiSqM_DF"      = "df",
-      "RMSEA_Estimate" = "RMSEA"
-    )
-    idx_labels <- ifelse(all_indices %in% names(rename_map),
-                         rename_map[all_indices],
-                         all_indices)
-
-    fit_vals <- sapply(all_indices, function(idx) {
+    fit_vals <- vapply(all_ix, function(idx) {
       if (idx == "ChiSqM_DF") {
-        if ("ChiSqM_DF" %in% names(summ))
-          as.character(as.integer(summ[["ChiSqM_DF"]]))
-        else NA_character_
-      } else if (idx == "Parameters") {
-        if ("Parameters" %in% names(summ))
-          as.character(as.integer(summ[["Parameters"]]))
-        else NA_character_
+        if (!is.null(summ$ChiSqM_DF)) {
+          as.character(as.integer(summ$ChiSqM_DF))
+        } else {
+          NA_character_
+        }
       } else if (idx == "χ²/df") {
-        if ("ChiSqM_Value" %in% names(summ) && "ChiSqM_DF" %in% names(summ) && summ[["ChiSqM_DF"]] != 0)
-          fmt_num(summ[["ChiSqM_Value"]] / summ[["ChiSqM_DF"]], digits_fit)
-        else NA_character_
+        if (!is.null(summ$ChiSqM_Value) &&
+            !is.null(summ$ChiSqM_DF)   &&
+            summ$ChiSqM_DF != 0) {
+          fmt_num(summ$ChiSqM_Value / summ$ChiSqM_DF, digits_fit)
+        } else {
+          NA_character_
+        }
+      } else if (!is.null(summ[[idx]])) {
+        fmt_num(summ[[idx]], digits_fit)
       } else {
-        if (idx %in% names(summ)) fmt_num(summ[[idx]], digits_fit) else NA_character_
+        NA_character_
       }
-    }, USE.NAMES = FALSE)
+    }, character(1))
 
-    fit_row <- data.frame(lhs = idx_labels,
-                          op  = rep("", length(idx_labels)),
-                          rhs = rep("", length(idx_labels)),
+    # pretty labels
+    rename_map <- c(ChiSqM_Value = "χ²", ChiSqM_DF = "df",
+                    RMSEA_Estimate = "RMSEA")
+    labels <- ifelse(all_ix %in% names(rename_map),
+                     rename_map[all_ix], all_ix)
+
+    ## ---- NEW: build row with annotation stub ---------------------------
+    n_lab  <- length(labels)
+    # empty columns for every part of the table --------------------------
+    fit_row <- data.frame(matrix("", nrow = n_lab,
+                                 ncol = length(c(ann_cols, "lhs","op","rhs"))),
                           stringsAsFactors = FALSE)
-    for (s in stat) {
-      fit_row[[s]] <- if (s == stat[1]) fit_vals else NA_character_
+    names(fit_row) <- c(ann_cols, "lhs", "op", "rhs")
+
+    if (length(ann_cols) > 0) {
+      # put the label in the FIRST annotation column (e.g., Type)
+      fit_row[[ann_cols[1]]] <- labels
+    } else {
+      # fall back to lhs if no annotation cols present
+      fit_row$lhs <- labels
     }
-    for (s in stat) {
-      new_name <- paste0("M", i, "_", s)
-      names(fit_row)[names(fit_row) == s] <- new_name
-    }
+
+    # drop operator/rhs for fit rows
+    fit_row$op  <- ""
+    fit_row$rhs <- ""
+
+    # attach values (only into the first stat column for this model) ------
+    first_stat  <- paste0("M", i, "_", stat[1])
+    for (s in stat) fit_row[[paste0("M", i, "_", s)]] <- ""
+    fit_row[[first_stat]] <- fit_vals
+
     fit_list[[i]] <- fit_row
-  }  # end loop over models
-
-  ## --- Merge coefficient tables ---
-  merged_coeff <- Reduce(function(x, y) full_join(x, y, by = c("lhs", "op", "rhs")), model_tables)
-
-  ## --- Ordering the merged coefficients ---
-  # Define a fixed operator order.
-  op_order <- c("=~" = 1, "~" = 2, "~ 1" = 3, "~~" = 4, ":=" = 5)
-  merged_coeff$order <- op_order[merged_coeff$op]
-  # Use the new argument to decide how to order.
-  order_by <- match.arg(order_by)
-  if(order_by == "lhs"){
-    merged_coeff <- merged_coeff[order(merged_coeff$order, merged_coeff$lhs), ]
-  } else {  # order_by == "rhs"
-    merged_coeff <- merged_coeff[order(merged_coeff$order, merged_coeff$rhs), ]
   }
+
+  # merge coefficients
+  merged_coeff <- Reduce(function(a,b) full_join(a,b,by=c("lhs","op","rhs")), model_tables)
+
+
+
+  # order coefficients
+  op_order <- c("=~"=1, "~"=2, "~ 1"=3, "~~"=4, ":="=5)
+  merged_coeff$order <- op_order[merged_coeff$op]
+  by <- match.arg(order_by)
+  merged_coeff <- if (by=="lhs") merged_coeff[order(merged_coeff$order, merged_coeff$lhs),]
+  else           merged_coeff[order(merged_coeff$order, merged_coeff$rhs),]
   merged_coeff$order <- NULL
 
-  ## --- Merge fit indices rows ---
-  merged_fit <- Reduce(function(x, y) full_join(x, y, by = c("lhs", "op", "rhs")), fit_list)
-
-  final_table <- dplyr::bind_rows(merged_coeff, merged_fit)
-  row.names(final_table) <- NULL
-  final_table[is.na(final_table)] <- ""
-
-  ## --- Force final_table to have all expected columns ---
-  expected_cols <- c("lhs", "op", "rhs",
-                     unlist(lapply(seq_len(num_models), function(i)
-                       paste0("M", i, "_", stat))))
-  for (col in expected_cols) {
-    if (!(col %in% colnames(final_table))) {
-      final_table[[col]] <- ""
+  # --- Annotation block (updated to handle manual vectors) ---
+  if (!is.null(annotations)) {
+    if (is.data.frame(annotations)) {
+      if (nrow(annotations) != nrow(merged_coeff))
+        stop("annotation data.frame must have ", nrow(merged_coeff), " rows")
+      merged_coeff <- cbind(annotations, merged_coeff)
+    } else if (is.list(annotations)) {
+      for (col in names(annotations)) {
+        vals <- annotations[[col]]
+        if (is.character(vals) && length(vals) == nrow(merged_coeff)) {
+          # manual vector
+          merged_coeff[[col]] <- vals
+        } else if (is.character(vals) && !is.null(names(vals))) {
+          # regex mapping: named vector of patterns
+          merged_coeff[[col]] <- ""
+          for (val in names(vals)) {
+            hits <- grepl(vals[[val]], merged_coeff$rhs)
+            merged_coeff[[col]][hits] <- val
+          }
+          # only first occurrence of each label
+          merged_coeff[[col]][duplicated(merged_coeff[[col]])] <- ""
+        } else {
+          stop("Invalid annotations[['", col, "']]: must be a length-n character vector or named regex vector.")
+        }
+      }
+    } else {
+      stop("annotations must be either a data.frame or a named list of character vectors.")
     }
   }
-  final_table <- final_table[, expected_cols, drop = FALSE]
 
-  ## --- Set Uniform Column Names for Display ---
-  if (standardized) {
-    mapping <- c(est = "β", se = "SE", z = "z", p = "p")
-  } else {
-    mapping <- c(est = "b", se = "SE", z = "z", p = "p")
-  }
-  lower_stat <- sapply(stat, function(s) {
-    if (s %in% names(mapping)) mapping[[s]] else s
-  }, USE.NAMES = FALSE)
-  model_stats_header <- unlist(lapply(seq_len(num_models), function(x) lower_stat))
-  new_colnames <- c("LHS", "Operator", "RHS", model_stats_header)
+  # merge fit
+  merged_fit <- Reduce(function(a,b) full_join(a,b,by=c("lhs","op","rhs")), fit_list)
 
-  ## --- Build Header Groups for kableExtra ---
-  header_groups <- c(" " = 3)
-  for (i in seq_along(model_names)) {
-    header_groups[ model_names[i] ] <- length(stat)
-  }
+  # bind and clean
+  final_table <- bind_rows(merged_coeff, merged_fit)
+  rownames(final_table) <- NULL
+  final_table[is.na(final_table)] <- ""
 
-  group_row_index <- nrow(merged_coeff)
+  # ensure all expected cols
+  ann_cols <- if (!is.null(annotations)) names(annotations) else character(0)
+  coef_cols <- unlist(lapply(seq_len(num_models), function(i) paste0("M",i,"_",stat)))
+  expected <- c(ann_cols, "lhs","op","rhs", coef_cols)
+  for (col in expected) if (!col %in% names(final_table)) final_table[[col]] <- ""
+  final_table <- final_table[, expected, drop=FALSE]
 
-  knitr::kable(final_table,
-               caption = title,
-               col.names = new_colnames) %>%
-    kableExtra::kable_classic(html_font = "Cambria", full_width = FALSE, position = "left") %>%
+  # set display names
+  mapping <- if (standardized) c(est="β", se="SE", z="z", p="p") else c(est="b", se="SE", z="z", p="p")
+  disp_stat <- sapply(stat, function(s) mapping[s] %||% s)
+  header_labels <- c(ann_cols, "LHS","Operator","RHS", rep(disp_stat, times=num_models))
+
+  # header grouping
+  n_static <- 3 + length(ann_cols)
+  header_groups <- c(" " = n_static)
+  for (nm in model_names) header_groups[nm] <- length(stat)
+
+  knitr::kable(final_table, caption=title, col.names=header_labels) %>%
+    kableExtra::kable_classic(html_font="Cambria", full_width=full_width, position="left") %>%
     kableExtra::add_header_above(header_groups) %>%
-    kableExtra::row_spec(group_row_index, extra_css = "border-bottom: 1px solid;") %>%
-    kableExtra::footnote(general = notes, footnote_as_chunk = TRUE)
+    kableExtra::row_spec(nrow(merged_coeff), extra_css="border-bottom: 1px solid;") %>%
+    kableExtra::footnote(general=notes, footnote_as_chunk=TRUE)
 }

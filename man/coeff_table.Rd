@@ -2,7 +2,7 @@
 % Please edit documentation in R/coeff_table.R
 \name{coeff_table}
 \alias{coeff_table}
-\title{Generate a Regression Coefficient Table with Fit Indices}
+\title{Regression Coefficient Table (Mplus ⇢ HTML)}
 \usage{
 coeff_table(
   ...,
@@ -17,85 +17,72 @@ coeff_table(
   title = "Table X. Unstandardized Regression Coefficients and Model Fit Indices.",
   notes = "Unstandardized coefficients are reported.",
   exclude = character(0),
-  order_by = c("lhs", "rhs")
+  order_by = c("lhs", "rhs"),
+  annotations = NULL,
+  full_width = FALSE
 )
 }
 \arguments{
-\item{...}{One or more model objects or nested lists of model objects from the
-\pkg{MpluAutomation} package.}
+\item{...}{One or more Mplus model objects *or* nested lists of such
+objects.}
 
-\item{stat}{Character vector specifying which statistics to include. The default is
-\code{c("est", "se", "p")}. Valid options include \code{"est"}, \code{"se"}, \code{"p"}, and \code{"z"}.
-Setting \code{stat = "all"} will include all four statistics: \code{"est"}, \code{"se"}, \code{"z"}, and \code{"p"}.}
+\item{stat}{Character vector of coefficient statistics to display;
+defaults to `c("est", "se", "p")`.  Use `"all"` for all
+four statistics (est, se, z, p).}
 
-\item{indices}{Additional names of model fit indices to include.}
+\item{indices}{Extra fit indices to add (e.g., `"AIC"`, `"BIC"`).}
 
-\item{digits_coeff}{Integer specifying the number of decimal places for coefficient values (default: 3).}
+\item{digits_coeff}{Decimal precision for coefficients (default `3`).}
 
-\item{digits_fit}{Integer specifying the number of decimal places for fit indices (default: 3).}
+\item{digits_fit}{Decimal precision for fit indices (default `3`).}
 
-\item{standardized}{Logical; if \code{TRUE}, standardized coefficients (from \code{stdyx.standardized}) are used,
-otherwise unstandardized coefficients are used (default: \code{FALSE}).}
+\item{standardized}{Logical; if `TRUE`, use `stdyx.standardized` values.}
 
-\item{params}{Character vector indicating which parameter types to include (default: \code{c("regression")}).}
+\item{params}{Which parameter classes to keep (e.g., `"regression"`).}
 
-\item{model_names}{Optional character vector providing names for the models. If \code{NULL}, names are extracted
-from the model's summary information (e.g., from \code{Filename}) or default names are assigned.}
+\item{model_names}{Optional vector of display names for models.}
 
-\item{stars}{Logical; if \code{TRUE}, significance stars are appended to coefficient estimates based on p-value thresholds.}
+\item{stars}{Logical; append significance stars when `TRUE`.}
 
-\item{title}{Character string for the table caption (default: \code{"Table X. Unstandardized Regression Coefficients and Model Fit Indices."}).}
+\item{title, notes}{Caption and foot‑note strings.}
 
-\item{notes}{Character string note to be added as a table footnote (default: \code{"Unstandardized coefficients are reported."}).}
+\item{exclude}{Regex patterns: rows whose *rhs* matches are dropped.}
 
-\item{exclude}{Character vector of substrings; any rows containing these substrings in the right-hand side (RHS)
-of the model equation will be excluded.}
+\item{order_by}{Either `"lhs"` (default) or `"rhs"` for row ordering.}
 
-\item{order_by}{Character value (\code{"lhs"} or \code{"rhs"}) indicating whether to order the rows by the left-hand
-side or right-hand side of the equation (default: \code{"lhs"}).}
+\item{annotations}{Either `NULL`, a `data.frame`, or a named `list` that
+defines extra annotation columns (see Details).}
+
+\item{full_width}{Passed to [kableExtra::kable_classic()].}
 }
 \value{
-A formatted table (using \code{knitr::kable} and \code{kableExtra}) displaying the regression coefficients,
-corresponding significance levels (with optional star markings), and model fit indices.
+A **kableExtra** HTML table.
 }
 \description{
-This function generates a formatted table displaying regression coefficients and model fit indices
-for one or multiple model objects. These model objects are typically created by the
-\pkg{MpluAutomation} package, for example via the \code{readModels()} function or as lists returned
-by the \code{extractModelSummaries()} function. The output table is formatted using
-\code{knitr::kable} and enhanced with \code{kableExtra} functions.
+`coeff_table()` ingests one or more model objects produced by
+**\pkg{MplusAutomation}** (e.g., via [readModels()] or
+[extractModelSummaries()]) and outputs a publication‑ready HTML table that
+combines regression coefficients and model‑fit indices.  The result is a
+**\pkg{kableExtra}** object that can be used directly in R Markdown, Quarto,
+or Shiny.
 }
 \details{
-The function is designed to work with model objects produced by the \pkg{MpluAutomation} package. It supports:
-
-\itemize{
-  \item{\strong{Single model objects:} Directly pass a model created by \code{readModels()}.}
-  \item{\strong{Complex model lists:} Pass a list of models, such as those returned by \code{extractModelSummaries()}.}
-  \item{\strong{Combined input:} Mix individual model objects and nested lists of models. The function flattens the input
-        for consistent processing.}
-}
-
-Internally, helper functions such as \code{fmt_num()}, \code{classify_param()}, and
-\code{create_formula_parts()} (which should be imported or defined in your environment) are used to format numbers,
-classify parameters, and construct equation parts respectively.
+Generate a Regression‑Coefficient Table with Model‑Fit Indices
 }
 \examples{
 \dontrun{
-# Example 1: Single model object from MpluAutomation
-model_single <- readModels("model_file.out")
-coeff_table(model_single)
+## Single model
+m1 <- MplusAutomation::readModels("cfa.out")
+coeff_table(m1)
 
-# Example 2: Complex model list returned by extractModelSummaries
-model_list <- extractModelSummaries("models_directory")
-coeff_table(model_list)
+## Multiple models with labels & extra indices
+mods <- MplusAutomation::readModels("sem_dir/")
+coeff_table(mods, model_names = c("Base", "Mediated"), indices = c("AIC", "BIC"))
 
-# Example 3: Combined input with an individual model and a nested model list
-model_extra <- readModels("another_model.out")
-models_combined <- list(model_set = extractModelSummaries("other_models_folder"))
-coeff_table(model_extra, models_combined)
+## With annotation columns
+coeff_table(mods$model1, mods$model2,
+            annotations = list(Type = c("Father→Father", rep("", 7))),
+            stars = TRUE)
 }
 
-}
-\seealso{
-\code{\link{readModels}}, \code{\link{extractModelSummaries}}, \code{knitr::kable}, \code{kableExtra::kable_classic}
 }
