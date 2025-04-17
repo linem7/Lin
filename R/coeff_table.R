@@ -51,6 +51,51 @@
 #' @importFrom dplyr bind_rows full_join
 #' @importFrom magrittr %>%
 #' @export
+
+# --- Helper Functions ---
+classify_param <- function(paramHeader, param) {
+  if (grepl("\\.BY$", paramHeader)) {
+    "loading"
+  } else if (grepl("\\.ON$", paramHeader)) {
+    if (tolower(param) == "constant") "expectation" else "regression"
+  } else if (grepl("\\.WITH$", paramHeader)) {
+    "undirected"
+  } else if (paramHeader %in% c("Intercepts", "Means", "Mean")) {
+    "expectation"
+  } else if (paramHeader %in% c("Variances", "Residual.Variances")) {
+    "variability"
+  } else if (paramHeader == "New.Additional.Parameters") {
+    "new"
+  } else {
+    "other"
+  }
+}
+
+create_formula_parts <- function(paramHeader, param) {
+  if (grepl("\\.BY$", paramHeader)) {
+    lhs <- sub("\\.BY$", "", paramHeader); op <- "=~"; rhs <- param
+  } else if (grepl("\\.ON$", paramHeader)) {
+    lhs <- sub("\\.ON$", "", paramHeader)
+    if (tolower(param) == "constant") { op <- "~ 1"; rhs <- "" } else { op <- "~"; rhs <- param }
+  } else if (grepl("\\.WITH$", paramHeader)) {
+    lhs <- sub("\\.WITH$", "", paramHeader); op <- "~~"; rhs <- param
+  } else if (paramHeader %in% c("Intercepts", "Means", "Mean")) {
+    lhs <- param; op <- "~ 1"; rhs <- ""
+  } else if (paramHeader %in% c("Variances", "Residual.Variances")) {
+    lhs <- param; op <- "~~"; rhs <- param
+  } else if (paramHeader == "New.Additional.Parameters") {
+    lhs <- "new"; op <-":="; rhs <- param
+  } else {
+    lhs <- paramHeader; op <- ""; rhs <- param
+  }
+  c(lhs = lhs, op = op, rhs = rhs)
+}
+
+fmt_num <- function(x, digits) {
+  ifelse(is.na(x), NA_character_, sprintf(paste0("%.", digits, "f"), x))
+}
+
+# --- Main Functions ---
 coeff_table <- function(...,
                         stat = c("est", "se", "p"),
                         indices = character(0),

@@ -3,7 +3,7 @@
 export("%>%")
 export(apa)
 export(apa_corr_matrix)
-export(coeff_table)
+export(classify_param)
 export(create_cfa_model)
 export(extract_labels)
 export(extract_plot_data)
