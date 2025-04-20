@@ -3,6 +3,7 @@
 .RData
 .Ruserdata
 inst/doc
+my_tests
 .Rdata
 .httr-oauth
 .DS_Store
