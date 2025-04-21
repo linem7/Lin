@@ -1,5 +1,6 @@
 ---
 output: github_document
+always_allow_html: true
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -39,11 +40,11 @@ library(Lin)
 set.wd()
 ```
 ### Mplus result demostration
-```{r, eval=FALSE}
+```{r}
 models <- readModels("./inst/extdata") # Using the data from Mplus offcial site.
 ```
 
-```{r, eval=FALSE}
+```{r}
 # Print model fit for comparison
 fit_table(models, ref = "last", indices = c("AIC")) %>% apa(title = "Table 1. Model comparison.")
 ```
