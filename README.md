@@ -6,6 +6,7 @@
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/linem7/Lin/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/linem7/Lin/actions/workflows/R-CMD-check.yaml)
+
 <!-- badges: end -->
 
 The goal of Lin is to provide some useful functions
@@ -26,6 +27,7 @@ devtools::install_github("linem7/Lin")
 library(bruceR)
 library(MplusAutomation)
 library(knitr)
+library(kableExtra)
 library(Lin)
 
 set.wd()
@@ -35,7 +37,7 @@ set.wd()
 ### Mplus result demostration
 
 ``` r
-models <- readModels("./inst/extdata") # Using the data from Mplus offcial site.
+models <- readModels("./inst/extdata") # Using the data from Mplus official site.
 ```
 
 ``` r
@@ -43,240 +45,14 @@ models <- readModels("./inst/extdata") # Using the data from Mplus offcial site.
 fit_table(models, ref = "last", indices = c("AIC")) %>% apa(title = "Table 1. Model comparison.")
 ```
 
-<table class=" lightable-classic" style="font-family: Cambria; ">
-<caption>
-Table 1. Model comparison.
-</caption>
-<thead>
-<tr>
-<th style="text-align:left;">
-Models
-</th>
-<th style="text-align:left;">
-Chisq
-</th>
-<th style="text-align:right;">
-df
-</th>
-<th style="text-align:left;">
-chisq/df
-</th>
-<th style="text-align:left;">
-CFI
-</th>
-<th style="text-align:left;">
-TLI
-</th>
-<th style="text-align:left;">
-RMSEA
-</th>
-<th style="text-align:left;">
-SRMR
-</th>
-<th style="text-align:left;">
-AIC
-</th>
-<th style="text-align:left;">
-ΔChisq
-</th>
-<th style="text-align:left;">
-p_ΔChisq
-</th>
-<th style="text-align:left;">
-ΔCFI
-</th>
-<th style="text-align:left;">
-ΔRMSEA
-</th>
-<th style="text-align:left;">
-ΔAIC
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left;">
-ex5.11.out
-</td>
-<td style="text-align:left;">
-53.704
-</td>
-<td style="text-align:right;">
-50
-</td>
-<td style="text-align:left;">
-1.074
-</td>
-<td style="text-align:left;">
-0.997
-</td>
-<td style="text-align:left;">
-0.997
-</td>
-<td style="text-align:left;">
-0.012
-</td>
-<td style="text-align:left;">
-0.027
-</td>
-<td style="text-align:left;">
-19373.920
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-ex5.12.out
-</td>
-<td style="text-align:left;">
-53.704
-</td>
-<td style="text-align:right;">
-50
-</td>
-<td style="text-align:left;">
-1.074
-</td>
-<td style="text-align:left;">
-0.997
-</td>
-<td style="text-align:left;">
-0.997
-</td>
-<td style="text-align:left;">
-0.012
-</td>
-<td style="text-align:left;">
-0.027
-</td>
-<td style="text-align:left;">
-19373.920
-</td>
-<td style="text-align:left;">
-0.000 (0)
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-0.000
-</td>
-<td style="text-align:left;">
-0.000
-</td>
-<td style="text-align:left;">
-0.000
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-ex5.13.out
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:right;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-19426.131
-</td>
-<td style="text-align:left;">
--50.210 (1)
-</td>
-<td style="text-align:left;">
-1.000
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-52.211
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-ex5.20.out
-</td>
-<td style="text-align:left;">
-4.090
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-0.409
-</td>
-<td style="text-align:left;">
-1.000
-</td>
-<td style="text-align:left;">
-1.000
-</td>
-<td style="text-align:left;">
-0.000
-</td>
-<td style="text-align:left;">
-0.012
-</td>
-<td style="text-align:left;">
-7831.898
-</td>
-<td style="text-align:left;">
-11546.232 (-24)
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
--11594.233
-</td>
-</tr>
-</tbody>
-</table>
+![](./inst/extdata/table.png)
 
 ``` r
 # Print coefficients
-# coeff_table(models, model_names = paste0("Models ", 1:4))
+coeff_table(models$ex5.11.out, models$ex5.12.out, models$ex5.13.out)
 ```
+
+![](./inst/extdata/coeff_1.png)
 
 ### Retieve data lables
 

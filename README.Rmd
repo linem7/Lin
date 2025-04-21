@@ -1,6 +1,6 @@
 ---
 output: github_document
-always_allow_html: true
+# always_allow_html: true
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -17,12 +17,15 @@ knitr::opts_chunk$set(
 # Lin
 
 <!-- badges: start -->
+
 [![R-CMD-check](https://github.com/linem7/Lin/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/linem7/Lin/actions/workflows/R-CMD-check.yaml)
+
 <!-- badges: end -->
 
 The goal of Lin is to provide some useful functions
 
 ## Installation
+
 ```{r, eval=FALSE, echo=TRUE}
 # Install from GitHub (if the repo is public)
 install.packages("devtools")
@@ -30,31 +33,38 @@ devtools::install_github("linem7/Lin")
 ```
 
 ## Examples
+
 ### Packages and working directory
+
 ```{r, message=FALSE}
 library(bruceR)
 library(MplusAutomation)
 library(knitr)
+library(kableExtra)
 library(Lin)
 
 set.wd()
 ```
+
 ### Mplus result demostration
-```{r}
-models <- readModels("./inst/extdata") # Using the data from Mplus offcial site.
+
+```{r, eval=FALSE}
+models <- readModels("./inst/extdata") # Using the data from Mplus official site.
 ```
 
-```{r}
+```{r, eval=FALSE}
 # Print model fit for comparison
 fit_table(models, ref = "last", indices = c("AIC")) %>% apa(title = "Table 1. Model comparison.")
 ```
-
-```{r}
+![](./inst/extdata/table.png)
+```{r, eval=FALSE}
 # Print coefficients
-# coeff_table(models, model_names = paste0("Models ", 1:4))
+coeff_table(models$ex5.11.out, models$ex5.12.out, models$ex5.13.out)
 ```
+![](./inst/extdata/coeff_1.png)
 
 ### Retieve data lables
+
 This is a basic example which shows you how to solve a common problem:
 
 ```{r example}
@@ -71,4 +81,3 @@ attr(df$score, "label") <- "Test Score"
 
 extract_labels(df)
 ```
-
