@@ -300,7 +300,7 @@ coeff_table <- function(
     ## drop by RHS pattern -----------------------------------------------------
     if (length(exclude)) {
       bad <- grepl(paste(exclude, collapse = "|"),
-                   tbl$rhs, ignore.case = TRUE)
+                   tbl$rhs, ignore.case = TRUE, perl = TRUE)
       tbl <- tbl[ !bad , ]
     }
 
@@ -351,9 +351,7 @@ coeff_table <- function(
                       nomatch = 99)                            # unknown ops last
 
   ## ---- final ordering --------------------------------------------------------
-  order_side <- match.arg(order_by)      # "lhs" or "rhs"  (already validated)
-  o <- order(precedence, merged_coeff[[order_side]], na.last = TRUE)
-
+  o <- order(precedence, merged_coeff[[v$order_by]], na.last = TRUE) # using the arg from .prep_arg
   ordered_coeff <- merged_coeff[o, , drop = FALSE]             # done
 
 
