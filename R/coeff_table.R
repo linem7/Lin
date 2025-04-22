@@ -500,7 +500,10 @@ coeff_table <- function(
   final_df <- dplyr::bind_rows(annotated_coeff, merged_fit)
   final_df[is.na(final_df)] <- ""         # replace any lingering NA’s
 
-  ## 7‑C (For debugging) return, or pass to Step 8 (header & rendering) -------
+  ## 7‑C  Drop row names so kable() doesn’t invent a first column -------------
+  row.names(final_df) <- NULL
+
+  ## 7‑D (For debugging) return, or pass to Step 8 (header & rendering) -------
   final_df
 
   ##############################################################################
@@ -535,17 +538,11 @@ coeff_table <- function(
   # 8C. Compute header spanner widths -----------------------------------------
   # Stub spans annotation + 3 structural columns
   stub_width    <- length(ann_cols) + 3
-  header_groups <- c(" " = stub_width)
+  header_groups <- c(" " = stub_width) # for add_header_above(" "=3, "Model A" = 3, "Model B" = 3)
 
   # One spanner per model, each covering length(stat) columns
   for (lbl in model_labels) {
     header_groups[lbl] <- length(stat)
-  }
-
-  # Paranoid repair: adjust stub if counts drift
-  extra <- ncol(final_df) - sum(header_groups)
-  if (extra != 0) {
-    header_groups[1] <- header_groups[1] + extra
   }
 
   # 8D. Render table with kableExtra -------------------------------------------
