@@ -22,6 +22,7 @@
 #'   or "first".
 #' @param diffTest Logical. If \code{TRUE} (default), difference metrics will be computed.
 #' @param digits Integer. Number of digits to round numeric outputs.
+#' @param model_names Optional character vector of custom model names. If supplied, its length must equal the number of models passed via `...`; these names will override the default names (extracted from each model’s `Filename` field). Defaults to `NULL`.
 #'
 #' @return A data frame containing the fit indices and difference metrics.
 #'
@@ -36,11 +37,12 @@ fit_table <- function(...,
                       indices = character(0),  # additional indices to report
                       ref = c("last", "first"),
                       diffTest = TRUE,
-                      digits = 3) {
+                      digits = 3,
+                      model_names = NULL) {
 
   ref <- match.arg(ref)
 
-  ## --- STEP 1: Flatten input objects into a single list of models ---
+  ## --- STEP 0: Flatten input objects into a single list of models ---
   args <- list(...)
   modelList <- list()
   for (obj in args) {
@@ -58,8 +60,22 @@ fit_table <- function(...,
     }
   }
 
+  ## --- STEP1: Validation for each arguments
   n <- length(modelList)
   if(n == 0) stop("No models provided.")
+  if (!is.character(indices))
+    stop("`indices` must be a character vector, extra index including LL, Parameters, AIC, and BIC.")
+  if (!is.logical(diffTest) || length(diffTest) != 1)
+    stop("`diffTest` must be a single TRUE or FALSE.")
+  if (!is.numeric(digits) || length(digits) != 1 || digits < 0)
+    stop("`digits` must be a single non‐negative number.")
+
+  if (!is.null(model_names)) {
+    if (!is.character(model_names))
+      stop("`model_names` must be a character vector.")
+    if (length(model_names) != n)
+      stop("`model_names` must have length equal to the number of models (", n, ").")
+  }
 
   ## --- STEP 2: Create an empty data.frame holder with default columns ---
   # Note: "Parameters" follows "LL".
@@ -73,8 +89,14 @@ fit_table <- function(...,
   for(i in seq_len(n)) {
     summ <- as.data.frame(modelList[[i]][["summaries"]])
 
-    # Model name: if available, from 'Filename'
-    holder$Models[i] <- if("Filename" %in% names(summ)) summ$Filename[1] else NA
+    # Model name: prefer model_names over Filename
+    holder$Models[i] <- if (!is.null(model_names)) {
+      model_names[i]
+    } else if ("Filename" %in% names(summ)) {
+      summ$Filename[1]
+    } else {
+      NA
+    }
 
     # Primary chi-square and df values (if available)
     if("ChiSqM_Value" %in% names(summ)) {

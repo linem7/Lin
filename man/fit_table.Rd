@@ -9,7 +9,8 @@ fit_table(
   indices = character(0),
   ref = c("last", "first"),
   diffTest = TRUE,
-  digits = 3
+  digits = 3,
+  model_names = NULL
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ or "first".}
 \item{diffTest}{Logical. If \code{TRUE} (default), difference metrics will be computed.}
 
 \item{digits}{Integer. Number of digits to round numeric outputs.}
+
+\item{model_names}{Optional character vector of custom model names. If supplied, its length must equal the number of models passed via `...`; these names will override the default names (extracted from each model’s `Filename` field). Defaults to `NULL`.}
 }
 \value{
 A data frame containing the fit indices and difference metrics.
