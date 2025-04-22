@@ -300,7 +300,9 @@ coeff_table <- function(
     ## drop by RHS pattern -----------------------------------------------------
     if (length(exclude)) {
       bad <- grepl(paste(exclude, collapse = "|"),
-                   tbl$rhs, ignore.case = TRUE, perl = TRUE)
+                   tbl$rhs,
+                   ignore.case = TRUE,
+                   perl = TRUE)
       tbl <- tbl[ !bad , ]
     }
 
