@@ -114,7 +114,7 @@ fit_table <- function(...,
     # Primary chi-square and df values (if available)
     if("ChiSqM_Value" %in% names(summ)) {
       # Format with sprintf to retain trailing zeros.
-      holder$Chisq[i] <- .format_value(as.numeric(summ$ChiSqM_Value[1]), digits)
+      holder$Chisq[i] <- sprintf(paste0("%.", digits, "f"), as.numeric(summ$ChiSqM_Value[1]))
     } else {
       holder$Chisq[i] <- NA
     }
@@ -132,7 +132,7 @@ fit_table <- function(...,
         # Handle zero degrees of freedom
         if (df_val == 0) {
           # If both chisq and df are zero, ratio is 0; otherwise, Inf.
-          ratio <- if (chisq_val == 0) 0 else Inf
+          ratio <- Inf
         } else {
           ratio <- chisq_val / df_val
         }
@@ -143,16 +143,16 @@ fit_table <- function(...,
     }
 
     # Other fit indices
-    holder$CFI[i]   <- if("CFI" %in% names(summ)) .format_value(as.numeric(summ$CFI[1]), digits) else NA
-    holder$TLI[i]   <- if("TLI" %in% names(summ)) .format_value(as.numeric(summ$TLI[1]), digits) else NA
-    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) .format_value(as.numeric(summ$RMSEA_Estimate[1]), digits) else NA
-    holder$SRMR[i]  <- if("SRMR" %in% names(summ)) .format_value(as.numeric(summ$SRMR[1]), digits) else NA
+    holder$CFI[i]   <- if("CFI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$CFI[1])) else NA
+    holder$TLI[i]   <- if("TLI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$TLI[1])) else NA
+    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$RMSEA_Estimate[1])) else NA
+    holder$SRMR[i]  <- if("SRMR" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$SRMR[1])) else NA
 
     # Information criteria and parameters (Parameters follows LL)
-    holder$LL[i]         <- if("LL" %in% names(summ)) .format_value(as.numeric(summ$LL[1]), digits) else NA
+    holder$LL[i]         <- if("LL" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$LL[1])) else NA
     holder$Parameters[i] <- if("Parameters" %in% names(summ)) as.numeric(summ$Parameters[1]) else NA
-    holder$AIC[i]        <- if("AIC" %in% names(summ)) .format_value(as.numeric(summ$AIC[1]), digits) else NA
-    holder$BIC[i]        <- if("BIC" %in% names(summ)) .format_value(as.numeric(summ$BIC[1]), digits) else NA
+    holder$AIC[i]        <- if("AIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$AIC[1])) else NA
+    holder$BIC[i]        <- if("BIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$BIC[1])) else NA
   }
 
 
