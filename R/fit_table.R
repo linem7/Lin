@@ -77,6 +77,18 @@ fit_table <- function(...,
       stop("`model_names` must have length equal to the number of models (", n, ").")
   }
 
+  #––– Vectorized helper –––
+  .format_value <- function(x, digits) {
+    x_num    <- as.numeric(x)
+    thresh   <- 10^(-digits)
+    thresh_s <- sprintf(paste0("%.", digits, "f"), thresh)
+    vapply(x_num, function(xi) {
+      if (is.na(xi)) return(NA_character_)
+      if (abs(xi) < thresh) paste0("<", thresh_s)
+      else                 sprintf(paste0("%.", digits, "f"), xi)
+    }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+  }
+
   ## --- STEP 2: Create an empty data.frame holder with default columns ---
   # Note: "Parameters" follows "LL".
   default_cols <- c("Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR",
@@ -86,6 +98,7 @@ fit_table <- function(...,
   colnames(holder) <- default_cols
 
   ## --- STEP 3: Populate the holder for each model ---
+
   for(i in seq_len(n)) {
     summ <- as.data.frame(modelList[[i]][["summaries"]])
 
@@ -101,7 +114,7 @@ fit_table <- function(...,
     # Primary chi-square and df values (if available)
     if("ChiSqM_Value" %in% names(summ)) {
       # Format with sprintf to retain trailing zeros.
-      holder$Chisq[i] <- sprintf(paste0("%.", digits, "f"), as.numeric(summ$ChiSqM_Value[1]))
+      holder$Chisq[i] <- .format_value(as.numeric(summ$ChiSqM_Value[1]), digits)
     } else {
       holder$Chisq[i] <- NA
     }
@@ -123,23 +136,23 @@ fit_table <- function(...,
         } else {
           ratio <- chisq_val / df_val
         }
-        holder[["chisq/df"]][i] <- sprintf(paste0("%.", digits, "f"), ratio)
+        holder[["chisq/df"]][i] <- .format_value(as.numeric(ratio), digits)
       } else {
         holder[["chisq/df"]][i] <- NA
       }
     }
 
     # Other fit indices
-    holder$CFI[i]   <- if("CFI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$CFI[1])) else NA
-    holder$TLI[i]   <- if("TLI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$TLI[1])) else NA
-    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$RMSEA_Estimate[1])) else NA
-    holder$SRMR[i]  <- if("SRMR" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$SRMR[1])) else NA
+    holder$CFI[i]   <- if("CFI" %in% names(summ)) .format_value(as.numeric(summ$CFI[1]), digits) else NA
+    holder$TLI[i]   <- if("TLI" %in% names(summ)) .format_value(as.numeric(summ$TLI[1]), digits) else NA
+    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) .format_value(as.numeric(summ$RMSEA_Estimate[1]), digits) else NA
+    holder$SRMR[i]  <- if("SRMR" %in% names(summ)) .format_value(as.numeric(summ$SRMR[1]), digits) else NA
 
     # Information criteria and parameters (Parameters follows LL)
-    holder$LL[i]         <- if("LL" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$LL[1])) else NA
+    holder$LL[i]         <- if("LL" %in% names(summ)) .format_value(as.numeric(summ$LL[1]), digits) else NA
     holder$Parameters[i] <- if("Parameters" %in% names(summ)) as.numeric(summ$Parameters[1]) else NA
-    holder$AIC[i]        <- if("AIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$AIC[1])) else NA
-    holder$BIC[i]        <- if("BIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$BIC[1])) else NA
+    holder$AIC[i]        <- if("AIC" %in% names(summ)) .format_value(as.numeric(summ$AIC[1]), digits) else NA
+    holder$BIC[i]        <- if("BIC" %in% names(summ)) .format_value(as.numeric(summ$BIC[1]), digits) else NA
   }
 
 
@@ -204,33 +217,41 @@ fit_table <- function(...,
     }
 
     # Append formatted difference metrics to the holder.
-    holder[["ΔCFI"]] <- ifelse(!is.na(ΔCFI), sprintf(paste0("%.", digits, "f"), ΔCFI), NA)
-    holder[["ΔRMSEA"]] <- ifelse(!is.na(ΔRMSEA), sprintf(paste0("%.", digits, "f"), ΔRMSEA), NA)
-    holder[["ΔChisq"]] <- ifelse(!is.na(ΔChisq) & !is.na(Δdf),
-                                 paste0(sprintf(paste0("%.", digits, "f"), ΔChisq), " (", sprintf("%d", round(Δdf)), ") ",
-                                        sapply(p_ΔChisq, function(p) {
-                                          if(is.na(p)) return("")
-                                          else if(p < 0.001) return("***")
-                                          else if(p < 0.01)  return("**")
-                                          else if(p < 0.05)  return("*")
-                                          else if(p < 0.1)   return(".")
-                                          else return("")
-                                        })),
-                                 NA)
-    holder[["p_ΔChisq"]] <- ifelse(!is.na(p_ΔChisq), sprintf(paste0("%.", digits, "f"), p_ΔChisq), NA)
+    holder[["ΔCFI"]]   <- .format_value(ΔCFI,   digits)
+    holder[["ΔRMSEA"]] <- .format_value(ΔRMSEA, digits)
     if("AIC" %in% colnames(holder)) {
-      holder[["ΔAIC"]] <- ifelse(!is.na(ΔAIC), sprintf(paste0("%.", digits, "f"), ΔAIC), NA)
+      holder[["ΔAIC"]] <- .format_value(ΔAIC, digits)
     }
     if("BIC" %in% colnames(holder)) {
-      holder[["ΔBIC"]] <- ifelse(!is.na(ΔBIC), sprintf(paste0("%.", digits, "f"), ΔBIC), NA)
+      holder[["ΔBIC"]] <- .format_value(ΔBIC, digits)
     }
+
+    stars <- vapply(p_ΔChisq, function(p) {
+      if      (is.na(p))      ""
+      else if (p < 0.001)     "***"
+      else if (p < 0.01)      "**"
+      else if (p < 0.05)      "*"
+      else if (p < 0.1)       "."
+      else                    ""
+    }, FUN.VALUE = character(1))
+
+    holder[["ΔChisq"]] <- ifelse(
+      !is.na(ΔChisq) & !is.na(Δdf),
+      paste0(.format_value(ΔChisq, digits), " (", Δdf, ") ", stars),
+      NA_character_
+    )
+    holder[["p_ΔChisq"]] <- ifelse(!is.na(p_ΔChisq), .format_value(as.numeric(p_ΔChisq), digits), NA)
   }
 
   ## --- STEP 5: Select and rearrange columns based on the 'indices' argument ---
   # Default indices that are always reported.
   default_indices <- c("Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR")
   # Default difference metrics to include.
-  default_diff <- c("ΔChisq", "p_ΔChisq", "ΔCFI", "ΔRMSEA")
+  default_diff    <- if (diffTest && n > 1) {
+    c("ΔChisq","p_ΔChisq","ΔCFI","ΔRMSEA")
+  } else {
+    character(0)
+  }
 
   if(length(indices) > 0) {
     # If "AIC" is mentioned, add both AIC and its difference; similarly for "BIC".
