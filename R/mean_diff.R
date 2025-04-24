@@ -1,59 +1,62 @@
-#' Mean‑Difference Table (APA–Style)
+#' Mean-Difference Table (APA Style)
 #'
-#' `mean_diff()` loops over one or more dependent variables (`dv`) and grouping
-#' variables (`iv`), running an independent‑samples *t*‑test when the grouping
-#' factor has two levels or a one‑way ANOVA when it has three or more.  The
-#' function returns a **named list** of data frames—one per dependent variable—
-#' formatted for quick copying into a manuscript.  Each data‑frame lists one row
-#' per category, shows *M* (SD), the test statistic, exact *p* value, optional
-#' effect size, and (for significant ANOVAs) Bonferroni/ Holm post‑hoc
-#' contrasts phrased as “A > B”.  Repeated IV labels are blanked after the first
-#' row for compact presentation.
+#' \code{mean_diff()} evaluates mean differences for one or more dependent variables
+#' \code{dv} across one or more grouping variables \code{iv}.  If a grouping variable
+#' has exactly two levels the function runs an independent‐samples \strong{t test};
+#' otherwise it runs a \strong{one-way ANOVA}.  Results are returned as a named list
+#' of data frames—one data frame per dependent variable—ready to paste into a
+#' manuscript or report.
 #'
-#' @param dv Character vector of **dependent‑variable** names.
-#' @param iv Character vector of **independent‑variable** (grouping) names.
-#' @param data A data frame containing all `dv` and `iv` columns.
-#' @param stars Logical.  If `TRUE`, append significance stars to the test
-#'   statistic (`* p < .05`, `** p < .01`, `*** p < .001`).  Default `FALSE`.
-#' @param effect Logical.  If `TRUE`, include effect sizes—Cohen’s *d* for
-#'   *t*‑tests and partial η² for ANOVAs.  Default `FALSE`.
-#' @param digits_desc Integer.  Number of decimals for means and SDs (default 2).
-#' @param digits_stat Integer.  Number of decimals for test statistics, *p*, and
-#'   effect sizes (default 3).
-#' @param p.adjust.method Adjustment method for post‑hoc *p* values.  One of
-#'   `"bonferroni"`, `"holm"`, or `"none"` (default "bonferroni").
+#' Each data-frame contains one row per category, displaying M (SD), the test statistic, the exact p value, an optional effect size,
+#' and (for significant ANOVAs) Bonferroni or Holm post-hoc contrasts written
+#' as “A > B”.  To avoid repetition, the IV name appears only in the first row
+#' of its block.
 #'
-#' @return A **named list**; each element is a data frame with columns:
-#'   \itemize{
-#'     \item `IV` – grouping variable (blank after first row of each block)
-#'     \item `Category` – factor level
-#'     \item `N` – sample size
-#'     \item `Mean (SD)` – descriptive statistics
-#'     \item `t/F` – test statistic (with stars if requested)
-#'     \item `P` – exact *p* value ("< 0.001" when appropriate)
-#'     \item `Effect Size` – Cohen’s *d* or η² (omitted when `effect = FALSE`)
-#'     \item `PostHoc` – significant pairwise results for ANOVA
-#'   }
+#' @param dv Character vector of dependent-variable names.
+#' @param iv Character vector of independent-variable (grouping) names.
+#' @param data Data frame that contains all specified `dv` and `iv` columns.
+#' @param stars Logical.  Add significance symbols to the test statistic,
+#' (`*p < .05, ** p < .01, *** p < .001`).  Default is `FALSE`.
+#' @param effect Logical.  Add effect sizes (Cohen’s d for t tests,
+#'   partial η² for ANOVAs).  Default is `FALSE`.
+#' @param digits_desc Integer.  Number of decimal places for means and SDs.
+#'   Default is 2.
+#' @param digits_stat Integer.  Decimal places for test statistics, p values,
+#'   and effect sizes.  Default is 3.
+#' @param p.adjust.method Character.  p-value adjustment for post-hoc tests;
+#'   one of "bonferroni (default)", "holm", or "none".
+#'
+#' @return A named list of data frames.  Each data frame includes:
+#' \describe{
+#'   \item{IV}{Grouping variable (blank after the first row).}
+#'   \item{Category}{Factor level.}
+#'   \item{N}{Sample size.}
+#'   \item{Mean (SD)}{Descriptive statistic.}
+#'   \item{t/F}{Test statistic (with stars if \code{stars = TRUE}).}
+#'   \item{P}{Exact p value (“< 0.001” when appropriate).}
+#'   \item{Effect Size}{Cohen’s d or partial η² (absent if \code{effect = FALSE}).}
+#'   \item{PostHoc}{Significant pairwise contrasts for ANOVA.}
+#' }
 #'
 #' @importFrom stats aggregate t.test aov complete.cases
 #' @importFrom car leveneTest
 #' @importFrom effsize cohen.d
-#' @examples
-#' ## Example with the mock dataset shipped in  `data/`  ----------------------
-#' data(test_data)               # <- stored in your package’s data/ folder
 #'
-#' # Run across two DVs and three IVs, show stars & effect sizes
-#' res <- mean_diff(
+#' @examples
+#' ## Example using the mock dataset `test_data`
+#' data(test_data)
+#'
+#' out <- mean_diff(
 #'   dv = c("var1", "var2"),
 #'   iv = c("gender", "grade", "area"),
-#'   data = test_data,
-#'   stars  = TRUE,
+#'   data  = test_data,
+#'   stars = TRUE,
 #'   effect = TRUE,
 #'   p.adjust.method = "holm"
 #' )
 #'
-#' res$var1   # inspect results for the first dependent variable
-#' res$var2   # ...and for the second
+#' out$var1    # results for var1
+#' out$var2    # results for var2
 #'
 #' @export
 mean_diff <- function(
