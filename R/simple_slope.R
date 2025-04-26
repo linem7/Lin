@@ -140,8 +140,8 @@ simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
   w_mean_lable = paste0("Mean", "\n", slp_mean)
   w_high_lable = paste0("M + 1SD", "\n", slp_hi)
 
-  df$w_level <- factor(rep(c(w_low_lable, w_mean_lable, w_high_lable), each = 2),
-                       levels = c(w_low_lable, w_mean_lable, w_high_lable))
+  df$w_level <- factor(rep(c(w_high_lable, w_mean_lable, w_low_lable), each = 2),
+                       levels = c(w_high_lable, w_mean_lable, w_low_lable))
 
   # Compute predicted outcome using: y = b0 + b1*x + b2*w + b3*x*w
   df$y <- with(df, b0 + b1 * x + b2 * w + b3 * x * w)
