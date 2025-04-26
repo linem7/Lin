@@ -133,7 +133,7 @@ simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
   # Create a data frame: two x-values for each of the three moderator levels
   df <- data.frame(
     x = rep(c(x_low, x_high), times = 3),
-    w = rep(c(w_low, w_mean, w_high), each = 2)
+    w = rep(c(w_high, w_mean, w_low), each = 2)
   )
 
   w_low_lable = paste0("M - 1SD", "\n", slp_lo)
