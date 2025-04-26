@@ -177,6 +177,7 @@ simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
     theme_classic(base_size = fontsize) +
     theme(text = element_text(family = "serif"),
           legend.position = leg_pos,
+          legend.key.size = unit(1, "cm"),
           legend.key.height = unit(2, "lines"),
           legend.justification = leg_just,
           legend.background = element_rect(fill = "white", color = "black"))
