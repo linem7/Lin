@@ -91,12 +91,30 @@ simple_slope <- function(model, x, w, int, y, slp_l, slp_h,
   var_w <- if(nrow(varw_row) > 0) varw_row$est[1] else 1
 
   # --- Retrieve simple slope labels ---
+  # Helper functions for formatting
+  num_fmt <- function(x, d) sprintf(paste0("%0.", d, "f"), x)
+
+  p_fmt <- function(p) {
+    if (p < .001) "< 0.001" else num_fmt(p, 3)
+  }
+
   slp_l_row <- subset(params, (paramHeader == "New.Additional.Parameters" & param == toupper(slp_l)))
   slp_h_row <- subset(params, (paramHeader == "New.Additional.Parameters" & param == toupper(slp_h)))
 
-  slp_lo <- if (nrow(slp_l_row) > 0) paste0("b = ", sprintf("%.3f", slp_l_row$est[1]), ", SE = ", sprintf("%.3f", slp_l_row$se[1]), ", p = ", sprintf("%.3f", slp_l_row$pval[1])) else ""
-  slp_mean <- if (nrow(iv_row) > 0) paste0("b = ", sprintf("%.3f", iv_row$est[1]), ", SE = ", sprintf("%.3f", iv_row$se[1]), ", p = ", sprintf("%.3f", iv_row$pval[1])) else ""
-  slp_hi <- if (nrow(slp_h_row) > 0) paste0("b = ", sprintf("%.3f", slp_h_row$est[1]), ", SE = ", sprintf("%.3f", slp_h_row$se[1]), ", p = ", sprintf("%.3f", slp_h_row$pval[1])) else ""
+  slp_lo   <- if (nrow(slp_l_row) > 0)
+    paste0("b = ", num_fmt(slp_l_row$est[1], 3),
+           ", SE = ", num_fmt(slp_l_row$se[1], 3),
+           ifelse(slp_l_row$pval[1] < 0.001, ", p < 0.001", paste0(", p = ", num_fmt(slp_l_row$pval[1], 3)))) else ""
+
+  slp_mean <- if (nrow(iv_row) > 0)
+    paste0("b = ", num_fmt(iv_row$est[1], 3),
+           ", SE = ", num_fmt(iv_row$se[1], 3),
+           ifelse(iv_row$pval[1] < 0.001, ", p < 0.001", paste0(", p = ", num_fmt(iv_row$pval[1], 3)))) else ""
+
+  slp_hi   <- if (nrow(slp_h_row) > 0)
+    paste0("b = ", num_fmt(slp_h_row$est[1], 3),
+           ", SE = ", num_fmt(slp_h_row$se[1], 3),
+           ifelse(slp_h_row$pval[1] < 0.001, ", p < 0.001", paste0(", p = ", num_fmt(slp_h_row$pval[1], 3)))) else ""
 
   # Compute standard deviations
   sd_x <- sqrt(var_x)
