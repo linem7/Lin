@@ -4,7 +4,7 @@
 \alias{fit_table_mix}
 \title{Mixture model Fit Indices}
 \usage{
-fit_table_mix(..., digits = 3, digits_prop = 1)
+fit_table_mix(..., digits = 3, digits_prop = 1, plot = FALSE)
 }
 \arguments{
 \item{digits}{Integer ≥ 0. Number of decimal places for the numeric fit
@@ -12,6 +12,9 @@ indices (AIC, BIC, aBIC, Entropy, p-values). *Default* = 3.}
 
 \item{digits_prop}{Integer ≥ 0. Decimal places for the class-size
 percentages in the **“Proportion (%)”** column. *Default* = 1.}
+
+\item{plot}{Logical.  If \code{TRUE}, also return a ggplot line chart
+of AIC/BIC/aBIC by number of classes.  (Default \code{FALSE}.)}
 
 \item{res}{A **list** of models produced by
 [MplusAutomation::readModels()].
