@@ -1,26 +1,54 @@
-#' Mixture model Fit Indices
+#' Mixture Model Fit Indices
 #'
-#' Creates a concise fit table for a **set of latent-class models** read with
-#' **MplusAutomation**: only the main information criteria, entropy and test
-#' p-values, plus the class-size profile of every solution.
+#' Creates a concise fit table for one or more latent-class models (e.g.,
+#' 1–*k* classes) read via **MplusAutomation**, reporting
+#' - Information criteria: AIC, BIC, aBIC
+#' - Entropy
+#' - Vuong–Lo–Mendell–Rubin (LMR) and bootstrap LRT (BLRT) p-values
+#' - Class-size proportions
 #'
-#' @param res A **list** of models produced by
+#' @param ...
+#'   One or more model objects (or lists of such) as returned by
 #'   [MplusAutomation::readModels()].
-#'   The list may contain any number of models (e.g., 1-class … *k*-class).
-#' @param digits Integer ≥ 0. Number of decimal places for the numeric fit
-#'   indices (AIC, BIC, aBIC, Entropy, p-values). *Default* = 3.
-#' @param digits_prop Integer ≥ 0. Decimal places for the class-size
-#'   percentages in the **“Proportion (%)”** column. *Default* = 1.
-#' @param plot       Logical.  If \code{TRUE}, also return a ggplot line chart
-#'                   of AIC/BIC/aBIC by number of classes.  (Default \code{FALSE}.)
-#' @return A `data.frame` with one row per model and the columns
-#'   **Model, AIC, BIC, aBIC, Entropy, p_LMR, p_BLRT, Proportion (%)**
-#'   (class sizes appear as e.g. `"48.7/31.5/19.8"`).
-#' @examples
-#' ## Suppose you already ran:
-#' ##   res <- MplusAutomation::readModels("LCA_results")
-#' fit_table_mix(res, digits = 2)
+#' @param digits
+#'   Integer ≥ 0. Number of decimal places for the fit indices
+#'   (AIC, BIC, aBIC, Entropy). Default: `3`.
+#' @param digits_prop
+#'   Integer ≥ 0. Number of decimal places for the class-size proportions
+#'   in the **Proportion (%)** column. Default: `1`.
+#' @param plot
+#'   Logical. If `TRUE`, the function returns a **list** with:
+#'   - `table`: the `data.frame` of fit indices
+#'   - `plot`: a **ggplot2** line chart of AIC/BIC/aBIC across class solutions
+#'   Default: `FALSE`.
 #'
+#' @return
+#' - If `plot = FALSE`, a `data.frame` with one row per model and columns:
+#'   **Model**, **AIC**, **BIC**, **aBIC**, **Entropy**, **p_LMR**, **p_BLRT**,
+#'   **Proportion (%)** (e.g. `"48.7/31.5/19.8"`).
+#' - If `plot = TRUE`, a list with components `table` and `plot` (a ggplot object).
+#'
+#' @seealso
+#' [MplusAutomation::readModels()]
+#'
+#' @examples
+#' \dontrun{
+#'   # Read in your LCA outputs
+#'   res <- MplusAutomation::readModels("LCA_results")
+#'
+#'   # Just the table:
+#'   fit_table_mix(res)
+#'
+#'   # Table + plot (with 2 decimal places):
+#'   out <- fit_table_mix(res, digits = 2, plot = TRUE)
+#'   out$table
+#'   out$plot
+#' }
+#'
+#' @importFrom tidyr pivot_longer
+#' @importFrom dplyr mutate select across
+#' @importFrom stringr str_replace
+#' @importFrom ggplot2 ggplot aes geom_line geom_point theme_classic labs
 #' @export
 fit_table_mix <- function(..., digits = 3, digits_prop = 1, plot = FALSE) {
 
