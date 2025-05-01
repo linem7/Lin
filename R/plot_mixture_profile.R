@@ -11,9 +11,11 @@
 #' @param select Integer indices or names of models to keep. NULL (default)
 #'   retains all models.
 #' @param param_order Optional character vector specifying the desired order
-#'   of the parameters on the x‐axis.
+#'   of the parameters on the x‐axis. If NULL and `param_rename` is provided,
+#'   the new names will be used in the order they appear in `param_rename`.
 #' @param param_rename Optional named character vector for recoding parameter
-#'   names, e.g. `c(oldName = "New Name")`.
+#'   names, e.g. `c(oldName = "New Name")`. The order of values here will be
+#'   used as the default `param_order` if not otherwise specified.
 #' @param prob_category Integer specifying which category to extract from
 #'   `parameters$probability.scale` (defaults to 2).
 #' @param param_exclude Optional character vector of parameter names to drop
@@ -111,10 +113,16 @@ plot_mixture_profile <- function(
     keep <- if (is.numeric(select)) model_labels[select] else select
     all_data <- dplyr::filter(all_data, Model %in% keep)
   }
+
   # Recode and reorder parameters
   if (!is.null(param_rename)) {
     all_data <- dplyr::mutate(all_data,
                               param = dplyr::recode(param, !!!param_rename))
+  }
+
+  # If param_order is NULL but user provided param_rename, derive order
+  if (is.null(param_order) && !is.null(param_rename)) {
+    param_order <- unname(param_rename)
   }
   if (!is.null(param_order)) {
     all_data <- dplyr::mutate(all_data,

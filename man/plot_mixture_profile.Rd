@@ -26,10 +26,12 @@ classes in each model.}
 retains all models.}
 
 \item{param_order}{Optional character vector specifying the desired order
-of the parameters on the x‐axis.}
+of the parameters on the x‐axis. If NULL and `param_rename` is provided,
+the new names will be used in the order they appear in `param_rename`.}
 
 \item{param_rename}{Optional named character vector for recoding parameter
-names, e.g. `c(oldName = "New Name")`.}
+names, e.g. `c(oldName = "New Name")`. The order of values here will be
+used as the default `param_order` if not otherwise specified.}
 
 \item{prob_category}{Integer specifying which category to extract from
 `parameters$probability.scale` (defaults to 2).}
