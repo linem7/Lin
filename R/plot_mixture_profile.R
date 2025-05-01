@@ -154,7 +154,7 @@ plot_mixture_profile <- function(
       ) +
       ggplot2::theme_bw() +
       ggplot2::theme(
-        axis.text.x = ggplot2::element_text(angle = 45, vjust = 0.5)
+        axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5)
       )
   } else {
     p <- ggplot2::ggplot(
@@ -179,6 +179,5 @@ plot_mixture_profile <- function(
         axis.text.x = ggplot2::element_text(angle = 45, vjust = 0.5)
       )
   }
-
   p
 }
