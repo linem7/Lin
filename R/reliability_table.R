@@ -1,44 +1,44 @@
-#’ Compute CFA Reliability Table
-#’
-#’ Fits one or more lavaan‐style CFA specifications, then for each latent:
-#’ - Cronbach’s α (tau-equivalent)
-#’ - Composite reliability (CR, tau-unequal)
-#’ - Average variance extracted (AVE)
-#’
-#’ If your spec has more than one factor, it also builds a single‐factor “Total”
-#’ model (all indicators) and returns its α/CR/AVE.
-#’
-#’ @param ...   Unnamed character strings of lavaan model syntax (each may
-#’              contain one or more “=~” lines).
-#’ @param data  A data.frame of observed variables.
-#’ @param digits Number of decimal places; uses \code{\link{sprintf}} so all
-#’               outputs are character.
-#’
-#’ @return A tibble with columns:
-#’   \describe{
-#’     \item{Variable}{The object name you passed (e.g. “spec_sf”).}
-#’     \item{Domain}{Each latent name (and “Total” if multi-factor).}
-#’     \item{Alpha}{Formatted Cronbach’s α.}
-#’     \item{CR}{Formatted composite reliability.}
-#’     \item{AVE}{Formatted AVE.}
-#’   }
-#’
-#’ @examples
-#’ ## Single-factor CFA
-#’ spec_sf <- 'F1 =~ x1 + x2 + x3 + x4'
-#’ rel_sf  <- reliability_table(spec_sf, data = my_data, digits = 3)
-#’
-#’ ## Multi-factor CFA
-#’ spec_mf <- paste0(
-#’   'F1 =~ x1 + x2 + x3', '\\n',
-#’   'F2 =~ y1 + y2 + y3 + y4'
-#’ )
-#’ rel_mf <- reliability_table(spec_mf, data = my_data, digits = 2)
-#’
-#’ ## Pass multiple specs at once
-#’ rel_all <- reliability_table(spec_sf, spec_mf, data = my_data)
-#’
-#’ @export
+#' Compute CFA Reliability Table
+#'
+#' Fits one or more lavaan‐style CFA specifications, then for each latent:
+#' - Cronbach’s α (tau-equivalent)
+#' - Composite reliability (CR, tau-unequal)
+#' - Average variance extracted (AVE)
+#'
+#' If your spec has more than one factor, it also builds a single‐factor “Total”
+#' model (all indicators) and returns its α/CR/AVE.
+#'
+#' @param ...   Unnamed character strings of lavaan model syntax (each may
+#'              contain one or more “=~” lines).
+#' @param data  A data.frame of observed variables.
+#' @param digits Number of decimal places; uses \code{\link{sprintf}} so all
+#'               outputs are character.
+#'
+#' @return A tibble with columns:
+#'   \describe{
+#'     \item{Variable}{The object name you passed (e.g. “spec_sf”).}
+#'     \item{Domain}{Each latent name (and “Total” if multi-factor).}
+#'     \item{Alpha}{Formatted Cronbach’s α.}
+#'     \item{CR}{Formatted composite reliability.}
+#'     \item{AVE}{Formatted AVE.}
+#'   }
+#'
+#' @examples
+#' ## Single-factor CFA
+#' spec_sf <- 'F1 =~ x1 + x2 + x3 + x4'
+#' rel_sf  <- reliability_table(spec_sf, data = my_data, digits = 3)
+#'
+#' ## Multi-factor CFA
+#' spec_mf <- paste0(
+#'   'F1 =~ x1 + x2 + x3', '\\n',
+#'   'F2 =~ y1 + y2 + y3 + y4'
+#' )
+#' rel_mf <- reliability_table(spec_mf, data = my_data, digits = 2)
+#'
+#' ## Pass multiple specs at once
+#' rel_all <- reliability_table(spec_sf, spec_mf, data = my_data)
+#'
+#' @export
 reliability_table <- function(..., data, digits = 3) {
   # capture all specs and the names you used when calling the function
   specs     <- list(...)
