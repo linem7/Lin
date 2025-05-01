@@ -1,48 +1,35 @@
-#' Mixture Model Fit Indices
+#' Mixture Model Fit Indices Table and Plot
 #'
-#' Creates a concise fit table for one or more latent-class models (e.g.,
-#' 1–*k* classes) read via **MplusAutomation**, reporting
-#' - Information criteria: AIC, BIC, aBIC
-#' - Entropy
-#' - Vuong–Lo–Mendell–Rubin (LMR) and bootstrap LRT (BLRT) p-values
-#' - Class-size proportions
+#' Creates a concise summary table of fit indices for one or more latent-class
+#' or latent-profile models read via \code{MplusAutomation}, and (optionally)
+#' generates a ggplot2 line chart of these indices across class solutions.
 #'
-#' @param ...
-#'   One or more model objects (or lists of such) as returned by
-#'   [MplusAutomation::readModels()].
-#' @param digits
-#'   Integer ≥ 0. Number of decimal places for the fit indices
-#'   (AIC, BIC, aBIC, Entropy). Default: `3`.
-#' @param digits_prop
-#'   Integer ≥ 0. Number of decimal places for the class-size proportions
-#'   in the **Proportion (%)** column. Default: `1`.
-#' @param plot
-#'   Logical. If `TRUE`, the function returns a **list** with:
-#'   - `table`: the `data.frame` of fit indices
-#'   - `plot`: a **ggplot2** line chart of AIC/BIC/aBIC across class solutions
-#'   Default: `FALSE`.
+#' The reported indices include:
+#' \describe{
+#'   \item{Information criteria}{AIC, BIC, and sample-size adjusted BIC (aBIC)}
+#'   \item{Entropy}{Model entropy}
+#'   \item{Likelihood tests}{Vuong–Lo–Mendell–Rubin (LMR) and bootstrap LRT (BLRT) p-values}
+#'   \item{Class-size proportions}{Percentages of most-likely class assignment}
+#' }
 #'
-#' @return
-#' - If `plot = FALSE`, a `data.frame` with one row per model and columns:
-#'   **Model**, **AIC**, **BIC**, **aBIC**, **Entropy**, **p_LMR**, **p_BLRT**,
-#'   **Proportion (%)** (e.g. `"48.7/31.5/19.8"`).
-#' - If `plot = TRUE`, a list with components `table` and `plot` (a ggplot object).
+#' @param ... One or more model objects as returned by \code{MplusAutomation::readModels()}, each containing \code{summaries} and \code{class_counts}.
+#' @param digits Integer ≥ 0. Number of decimal places for fit indices (\code{AIC}, \code{BIC}, \code{aBIC}, \code{Entropy}). Default: 3.
+#' @param digits_prop Integer ≥ 0. Number of decimal places for class-size proportions (in the Proportion column). Default: 1.
+#' @param plot Logical. If \code{TRUE}, returns a \code{list} with components \code{table} (a \code{data.frame} of fit indices) and \code{plot} (a \code{ggplot2} line chart). Default: \code{FALSE}.
+#' @return A \code{data.frame} of fit indices, or (if \code{plot = TRUE}) a \code{list} with elements \code{table} and \code{plot}.
+#' @details
+#' The chart tries to parse the number of classes from the `Model` string via
+#' regex. If your model titles don’t follow the “X class” pattern, the x-axis
+#' may mislabel.
 #'
-#' @seealso
-#' [MplusAutomation::readModels()]
+#' @seealso \code{\link[MplusAutomation]{readModels}}
 #'
 #' @examples
 #' \dontrun{
-#'   # Read in your LCA outputs
 #'   res <- MplusAutomation::readModels("LCA_results")
-#'
-#'   # Just the table:
 #'   fit_table_mix(res)
-#'
-#'   # Table + plot (with 2 decimal places):
 #'   out <- fit_table_mix(res, digits = 2, plot = TRUE)
-#'   out$table
-#'   out$plot
+#'   out$table; out$plot
 #' }
 #'
 #' @importFrom tidyr pivot_longer
