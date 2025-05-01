@@ -16,14 +16,7 @@ contain one or more “=~” lines).}
 outputs are character.}
 }
 \value{
-A tibble with columns:
-  \describe{
-    \item{Variable}{The object name you passed (e.g. “spec_sf”).}
-    \item{Domain}{Each latent name (and “Total” if multi-factor).}
-    \item{Alpha}{Formatted Cronbach’s α.}
-    \item{CR}{Formatted composite reliability.}
-    \item{AVE}{Formatted AVE.}
-  }
+A tibble with columns Variable, Domain, Alpha, CR, and AVE
 }
 \description{
 Fits one or more lavaan‐style CFA specifications, then for each latent:
@@ -50,4 +43,7 @@ rel_mf <- reliability_table(spec_mf, data = my_data, digits = 2)
 ## Pass multiple specs at once
 rel_all <- reliability_table(spec_sf, spec_mf, data = my_data)
 
+}
+\seealso{
+\code{\link[semTools]{reliability}}, \code{\link[semTools]{compRelSEM}}, \code{\link[semTools]{AVE}}
 }

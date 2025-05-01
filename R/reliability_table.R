@@ -13,15 +13,9 @@
 #' @param data  A data.frame of observed variables.
 #' @param digits Number of decimal places; uses \code{\link{sprintf}} so all
 #'               outputs are character.
+#' @return A tibble with columns Variable, Domain, Alpha, CR, and AVE
 #'
-#' @return A tibble with columns:
-#'   \describe{
-#'     \item{Variable}{The object name you passed (e.g. “spec_sf”).}
-#'     \item{Domain}{Each latent name (and “Total” if multi-factor).}
-#'     \item{Alpha}{Formatted Cronbach’s α.}
-#'     \item{CR}{Formatted composite reliability.}
-#'     \item{AVE}{Formatted AVE.}
-#'   }
+#' @seealso \code{\link[semTools]{reliability}}, \code{\link[semTools]{compRelSEM}}, \code{\link[semTools]{AVE}}
 #'
 #' @examples
 #' ## Single-factor CFA
