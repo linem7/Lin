@@ -96,7 +96,7 @@ cor_table <- function(data, vars,
         s <- get_stars(p_matrix[i, j])
         formatted_corr[i, j] <- paste0(r, s)
       } else if (i == j) {
-        formatted_corr[i, j] <- "-"   # diagonal
+        formatted_corr[i, j] <- "\u2013"   # diagonal
       }
     }
   }

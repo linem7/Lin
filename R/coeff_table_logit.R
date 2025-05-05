@@ -219,7 +219,7 @@ coeff_table_logit <- function(model,
     left_join(stats_df, by = c("y.level", "term")) %>%
     mutate(across(all_of(stat_cols), ~ case_when(
       type == "label" ~ "",
-      type == "ref"   ~ "-",
+      type == "ref"   ~ "\u2013",
       TRUE            ~ .
     ))) %>%
     arrange(ord, factor(y.level, levels = out_lvls))
