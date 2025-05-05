@@ -1,41 +1,50 @@
-#' Create a coefficient table for multinomial or binary logistic regression
+#' Create a formatted coefficient table for logistic and multinomial models
 #'
-#' `coeff_table_logit()` produces a styled HTML table of regression coefficients,
-#' standard errors, odds ratios, p-values, and (optionally) confidence intervals
-#' and significance stars, for either a `nnet::multinom()` or a
-#' `glm(..., family = binomial())` model.  Categorical predictors are indented;
-#' very small values are shown as “< 0.01” or “< 0.001”; and the table is
-#' rendered with **kableExtra**.
+#' `coeff_table_logit()` takes a fitted model—either a `glm(..., family=binomial)` or
+#' a `nnet::multinom()`—and returns an HTML table of coefficients (b), standard errors (SE),
+#' odds ratios (OR), p-values, optional confidence intervals (CI), and significance stars.
+#' Categorical predictors are indented; very small numbers display as “< 0.01” or “< 0.001”.
 #'
-#' @param model A fitted model object: either a `multinom` from **nnet** or a
-#'   `glm` with `family = binomial()`.
-#' @param digits Integer ≥ 0; number of decimal places for estimates, SEs, ORs.
-#'   Values non-zero but smaller than `1/10^digits` are shown as `< 0.xxx`.
-#' @param p_digits Integer ≥ 0; decimal places for p-values.  Values smaller
-#'   than `1/10^p_digits` are shown as `< 0.xxx`.
-#' @param ci Logical; if `TRUE`, include confidence intervals.
+#' @param model A fitted model object.  Must be either:
+#'   - A `glm` with `family = binomial(link = "logit")`, or
+#'   - A `multinom` object from **nnet**.
+#' @param digits Integer ≥ 0. Number of decimal places for b, SE, and OR.
+#'   Values nonzero but smaller than `1/10^digits` are shown as `< 0.xxx`.
+#' @param p_digits Integer ≥ 0. Decimal places for p-values; values smaller than
+#'   `1/10^p_digits` are shown as `< 0.xxx`.
+#' @param ci Logical; if `TRUE`, include 95% confidence intervals for the OR
+#'   computed via the Wald formula on the log-odds scale (SPSS style).
 #' @param stars Logical; if `TRUE`, append `*` for p<.05, `**` for p<.01,
-#'   `***` for p<.001 to the coefficient.
-#' @param notes Character; optional footnote text displayed below the table.
-#' @param title Character; table caption.
-#' @param conf.level Numeric in (0,1); confidence level for intervals (default 0.95).
+#'   and `***` for p<.001 to the b values.
+#' @param notes Optional character.  A footnote printed below the table.
+#' @param title Optional character.  The table caption.
 #' @param ... Additional arguments passed to `knitr::kable()`.
 #'
-#' @return An HTML `kable` object styled by **kableExtra**.
+#' @details
+#' By default, R uses the *first* factor level as the reference for both the outcome
+#' (in `glm`) and any categorical predictors (`contr.treatment`).  SPSS by default
+#' uses the *last* level.  As a result, the intercept (constant) may differ
+#' numerically between R and SPSS.  To match SPSS’s intercept, relevel your outcome
+#' and predictors in R, e.g.
+#' ```r
+#' df$Y <- relevel(df$Y, ref = "1")        # if SPSS models “1” as success
+#' df$gender <- relevel(df$gender, ref = "Female")
+#' ```
+#'
+#' @return An HTML `kable` object (styled via **kableExtra**) showing b, SE, OR,
+#'   p value, optional CI, and significance stars, with one block of columns per
+#'   non-baseline outcome level.
 #'
 #' @examples
-#' \donttest{
-#' # Binary logistic regression (mtcars)
+#' # Binary logistic regression example (mtcars) ------------------------------
 #' library(dplyr)
 #' data(mtcars)
 #' mtcars$am <- factor(mtcars$am,
 #'                     levels = c(0,1),
 #'                     labels = c("Automatic","Manual"))
-#'
 #' glm_fit <- glm(am ~ mpg + factor(cyl) + hp,
 #'                data   = mtcars,
 #'                family = binomial(link = "logit"))
-#'
 #' coeff_table_logit(
 #'   glm_fit,
 #'   digits    = 2,
@@ -46,7 +55,7 @@
 #'   title     = "Logistic Regression on mtcars"
 #' )
 #'
-#' # Multinomial logistic regression (iris)
+#' # Multinomial logistic regression example (iris) ----------------------------
 #' library(nnet)
 #' library(dplyr)
 #' data(iris)
@@ -54,36 +63,34 @@
 #'   mutate(WidthCat = cut(Sepal.Width,
 #'                         breaks = 3,
 #'                         labels = c("Small","Medium","Large")))
+#' # match SPSS reference for Species = "setosa"
 #' iris2$Species <- relevel(iris2$Species, ref = "setosa")
-#'
 #' multinom_fit <- multinom(Species ~ Sepal.Length + Petal.Width + WidthCat,
-#'                          data = iris2, trace = FALSE)
-#'
+#'                          data  = iris2,
+#'                          trace = FALSE)
 #' coeff_table_logit(
 #'   multinom_fit,
 #'   digits    = 3,
 #'   p_digits  = 3,
 #'   ci        = TRUE,
 #'   stars     = FALSE,
-#'   notes     = "Odds ratios and 95% CI.",
+#'   notes     = "Odds ratios and 95% CIs via Wald method.",
 #'   title     = "Iris Species Multinomial Model"
 #' )
-#' }
 #'
 #' @importFrom broom tidy
-#' @importFrom dplyr rename mutate select left_join case_when across arrange
+#' @importFrom dplyr select mutate left_join case_when across
 #' @importFrom tidyr pivot_wider crossing
 #' @importFrom knitr kable
-#' @importFrom kableExtra kable_classic kable_styling add_header_above footnote
+#' @importFrom kableExtra kable_classic add_header_above footnote
 #' @export
 coeff_table_logit <- function(model,
                               digits     = 3,
                               p_digits   = 3,
-                              ci         = TRUE,
-                              stars      = FALSE,
+                              ci         = FALSE,
+                              stars      = TRUE,
                               notes      = NULL,
                               title      = NULL,
-                              conf.level = 0.95,
                               ...) {
   # 0. allow multinom or glm(binomial)
   ok1 <- inherits(model, "multinom")
@@ -120,7 +127,7 @@ coeff_table_logit <- function(model,
   }
 
   # 4. tidy coefficient table
-  est_tbl <- broom::tidy(model, exponentiate=FALSE, conf.int=FALSE)
+  est_tbl <- broom::tidy(model, exponentiate = FALSE, conf.int = FALSE)
   if (!"y.level" %in% names(est_tbl)) {
     est_tbl <- est_tbl %>% mutate(y.level = out_lvls)
   }
@@ -129,10 +136,10 @@ coeff_table_logit <- function(model,
   or_tbl <- broom::tidy(model,
                         exponentiate = TRUE,
                         conf.int     = TRUE,
-                        conf.level   = conf.level) %>%
-    rename(or_raw = estimate,
-           CI_low = conf.low,
-           CI_high= conf.high)
+                        conf.level   = 0.95) %>%
+    rename(or_raw  = estimate,
+           CI_low  = conf.low,
+           CI_high = conf.high)
   if (!"y.level" %in% names(or_tbl)) {
     or_tbl <- or_tbl %>% mutate(y.level = out_lvls)
   }
@@ -144,7 +151,7 @@ coeff_table_logit <- function(model,
            se_raw = std.error,
            p_raw  = p.value) %>%
     left_join(or_tbl %>% select(y.level, term, or_raw, CI_low, CI_high),
-              by = c("y.level","term")) %>%
+              by = c("y.level", "term")) %>%
     mutate(
       b_fmt  = fmt_num(b_raw,  digits),
       se_fmt = fmt_num(se_raw, digits),
@@ -169,46 +176,57 @@ coeff_table_logit <- function(model,
       b_disp = ifelse(b_fmt %in% c("", "-"), b_fmt, paste0(b_fmt, star))
     ) %>%
     { # dynamically select only existing columns
-      cols <- c("y.level","term","b_disp","se_fmt","or_fmt","p_fmt")
-      if (ci) cols <- c(cols,"CI_fmt")
+      cols <- c("y.level", "term", "b_disp", "se_fmt", "or_fmt", "p_fmt")
+      if (ci) cols <- c(cols, "CI_fmt")
       select(., all_of(cols))
     }
 
-  # 7. predictor structure + indentation
-  terms_all <- names(attr(terms(model), "dataClasses"))[-1]
-  xlevels   <- model$xlevels
-  struct <- bind_rows(lapply(terms_all, function(var) {
-    lab <- attr(mf[[var]], "label", exact = TRUE)
+  # 7. build display structure: intercept + predictors
+  terms_all    <- names(attr(terms(model), "dataClasses"))[-1]
+  xlevels      <- model$xlevels
+
+  # intercept row
+  intercept_df <- tibble(
+    display = "(Intercept)",
+    term    = "(Intercept)",
+    type    = "est"
+  )
+
+  # predictor rows
+  predictor_df <- bind_rows(lapply(terms_all, function(var) {
+    lab  <- attr(mf[[var]], "label", exact = TRUE)
     disp <- if (!is.null(lab)) lab else tools::toTitleCase(var)
     if (var %in% names(xlevels)) {
       levs <- xlevels[[var]]
       tibble(
         display = c(disp, paste0("\u00A0\u00A0", levs)),
         term    = c(NA, NA, paste0(var, levs[-1])),
-        type    = c("label","ref", rep("est", length(levs)-1))
+        type    = c("label", "ref", rep("est", length(levs)-1))
       )
     } else {
-      tibble(display=disp, term=var, type="est")
+      tibble(display = disp, term = var, type = "est")
     }
-  })) %>% mutate(ord = row_number())
+  }))
 
-  # 8. merge structure + stats, hyphens/blanks
-  #    build stat_cols too
-  stat_cols <- c("b_disp","se_fmt","or_fmt","p_fmt")
-  if (ci) stat_cols <- c(stat_cols,"CI_fmt")
+  struct <- bind_rows(intercept_df, predictor_df) %>%
+    mutate(ord = row_number())
+
+  # 8. merge struct + stats, hyphens/blanks
+  stat_cols <- c("b_disp", "se_fmt", "or_fmt", "p_fmt")
+  if (ci) stat_cols <- c(stat_cols, "CI_fmt")
 
   combo <- tidyr::crossing(struct, y.level = out_lvls) %>%
-    left_join(stats_df, by = c("y.level","term")) %>%
+    left_join(stats_df, by = c("y.level", "term")) %>%
     mutate(across(all_of(stat_cols), ~ case_when(
       type == "label" ~ "",
       type == "ref"   ~ "-",
       TRUE            ~ .
     ))) %>%
-    arrange(ord, factor(y.level, levels=out_lvls))
+    arrange(ord, factor(y.level, levels = out_lvls))
 
   # 9. pivot to wide
   wide <- combo %>%
-    select(-type,-term,-ord) %>%
+    select(-type, -term, -ord) %>%
     pivot_wider(
       id_cols     = display,
       names_from  = y.level,
@@ -218,18 +236,18 @@ coeff_table_logit <- function(model,
     rename(Predictor = display)
 
   # 10. reorder columns
-  suffixes <- c("_b_disp","_se_fmt","_or_fmt","_p_fmt")
-  if (ci) suffixes <- c(suffixes,"_CI_fmt")
+  suffixes <- c("_b_disp", "_se_fmt", "_or_fmt", "_p_fmt")
+  if (ci) suffixes <- c(suffixes, "_CI_fmt")
   col_seq  <- unlist(lapply(out_lvls, function(l) paste0(l, suffixes)))
   wide     <- wide %>% select(Predictor, any_of(col_seq))
 
   # 11. headers & render
-  stats_names <- c("b","SE","OR","p value")
-  if (ci) stats_names <- c(stats_names,"CI")
-  bottom <- c("Predictor", rep(stats_names, length(out_lvls)))
-  top    <- c(" " = 1,
-              setNames(rep(length(stats_names), length(out_lvls)),
-                       out_lvls))
+  stats_names <- c("b", "SE", "OR", "p value")
+  if (ci) stats_names <- c(stats_names, "CI")
+  bottom      <- c("Predictor", rep(stats_names, length(out_lvls)))
+  top         <- c(" " = 1,
+                   setNames(rep(length(stats_names), length(out_lvls)),
+                            out_lvls))
 
   wide %>%
     knitr::kable(
@@ -251,3 +269,4 @@ coeff_table_logit <- function(model,
       escape            = FALSE
     )
 }
+
