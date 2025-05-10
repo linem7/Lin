@@ -243,6 +243,12 @@ fit_table <- function(...,
     holder[["p_ΔChisq"]] <- ifelse(!is.na(p_ΔChisq), .format_value(as.numeric(p_ΔChisq), digits), NA)
   }
 
+  if (diffTest && n > 1) {
+    diff_cols <- c("ΔChisq", "p_ΔChisq", "ΔCFI", "ΔRMSEA",
+                   intersect(colnames(holder), c("ΔAIC", "ΔBIC")))
+    holder[1, diff_cols] <- "\u2013"
+  }
+
   ## --- STEP 5: Select and rearrange columns based on the 'indices' argument ---
   # Default indices that are always reported.
   default_indices <- c("Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR")
