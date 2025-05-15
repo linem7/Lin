@@ -36,18 +36,14 @@ devtools::install_github("linem7/Lin")
 
 ### Packages and working directory
 
-```{r, message=FALSE}
-library(bruceR)
+```{r, message=FALSE, warning=FALSE}
 library(MplusAutomation)
 library(knitr)
 library(kableExtra)
 library(Lin)
-
-set.wd()
 ```
 
 ### Mplus result demostration
-
 ```{r, eval=FALSE}
 models <- readModels("./inst/extdata") # Using the data from Mplus official site.
 ```

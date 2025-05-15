@@ -1,15 +1,15 @@
 #' Fit Table of Model Fit Indices and Difference Metrics
 #'
 #' This function creates a table of fit indices for one or more models and computes
-#' difference metrics (e.g., ΔCFI, ΔRMSEA, ΔChisq) between comparative models. If the
+#' difference metrics (e.g., ΔCFI, ΔRMSEA, Δχ²) between comparative models. If the
 #' primary chi-square values or degrees of freedom are unavailable, the function will
 #' automatically switch to a log-likelihood (LL) based approach. When available, the
 #' LLCorrectionFactor is used; otherwise, the LL difference is computed using LL alone.
 #'
 #' The final output always displays the default fit indices:
-#' \code{"Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR"}
+#' \code{"Models", "χ²/df", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR"}
 #' and the default difference metrics:
-#' \code{"ΔChisq", "p_ΔChisq", "ΔCFI", "ΔRMSEA"}. If the user specifies additional indices
+#' \code{"Δχ²", "p_Δχ²", "ΔCFI", "ΔRMSEA"}. If the user specifies additional indices
 #' (e.g., "AIC", "BIC") via the \code{indices} argument, then those indices will be included
 #' in the fit chunk, and their corresponding difference metrics (ΔAIC and/or ΔBIC) will be added
 #' to the diff chunk.
@@ -91,7 +91,7 @@ fit_table <- function(...,
 
   ## --- STEP 2: Create an empty data.frame holder with default columns ---
   # Note: "Parameters" follows "LL".
-  default_cols <- c("Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR",
+  default_cols <- c("Models", "χ²(df)", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR",
                     "LL", "Parameters", "AIC", "BIC")
   holder <- data.frame(matrix(NA, nrow = n, ncol = length(default_cols)),
                        stringsAsFactors = FALSE)
@@ -111,16 +111,22 @@ fit_table <- function(...,
       NA
     }
 
-    # Primary chi-square and df values (if available)
     if("ChiSqM_Value" %in% names(summ)) {
-      # Format with sprintf to retain trailing zeros.
-      holder$Chisq[i] <- sprintf(paste0("%.", digits, "f"), as.numeric(summ$ChiSqM_Value[1]))
+      chisq_val <- sprintf(paste0("%.", digits, "f"), as.numeric(summ$ChiSqM_Value[1]))
     } else {
-      holder$Chisq[i] <- NA
+      chisq_val <- NA
     }
-    holder$df[i] <- if("ChiSqM_DF" %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
 
-    # Compute chisq/df if both chi-square and df are available.
+    df_val <- if("ChiSqM_DF" %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
+
+    # Combine chi-square and df into a single column (χ²(df))
+    holder$`χ²(df)`[i] <- if (!is.na(chisq_val) && !is.na(df_val)) {
+      paste0(chisq_val, " (", df_val, ")")
+    } else {
+      NA
+    }
+
+    # Compute χ²/df if both chi-square and df are available.
     {
       chisq_raw <- if("ChiSqM_Value" %in% names(summ)) summ$ChiSqM_Value[1] else NA
       df_raw    <- if("ChiSqM_DF" %in% names(summ)) summ$ChiSqM_DF[1] else NA
@@ -136,9 +142,9 @@ fit_table <- function(...,
         } else {
           ratio <- chisq_val / df_val
         }
-        holder[["chisq/df"]][i] <- .format_value(as.numeric(ratio), digits)
+        holder[["χ²/df"]][i] <- .format_value(as.numeric(ratio), digits)
       } else {
-        holder[["chisq/df"]][i] <- NA
+        holder[["χ²/df"]][i] <- NA
       }
     }
 
@@ -163,9 +169,9 @@ fit_table <- function(...,
     ΔRMSEA    <- rep(NA, n)
     ΔAIC      <- rep(NA, n)
     ΔBIC      <- rep(NA, n)
-    ΔChisq   <- rep(NA, n)
+    `Δχ²`   <- rep(NA, n)
     Δdf      <- rep(NA, n)
-    p_ΔChisq <- rep(NA, n)
+    `p_Δχ²` <- rep(NA, n)
 
     for(i in 2:n) {
       # Choose reference row based on 'ref'
@@ -209,11 +215,11 @@ fit_table <- function(...,
         delta_df_val <- NA
       }
 
-      ΔChisq[i] <- delta_chisq
+      `Δχ²`[i] <- delta_chisq
       Δdf[i]    <- delta_df_val
       p_val <- if(!is.na(delta_df_val) && delta_df_val > 0 && !is.na(delta_chisq))
         1 - pchisq(delta_chisq, df = delta_df_val) else NA
-      p_ΔChisq[i] <- p_val
+      `p_Δχ²`[i] <- p_val
     }
 
     # Append formatted difference metrics to the holder.
@@ -226,7 +232,7 @@ fit_table <- function(...,
       holder[["ΔBIC"]] <- .format_value(ΔBIC, digits)
     }
 
-    stars <- vapply(p_ΔChisq, function(p) {
+    stars <- vapply(`p_Δχ²`, function(p) {
       if      (is.na(p))      ""
       else if (p < 0.001)     "***"
       else if (p < 0.01)      "**"
@@ -235,26 +241,26 @@ fit_table <- function(...,
       else                    ""
     }, FUN.VALUE = character(1))
 
-    holder[["ΔChisq"]] <- ifelse(
-      !is.na(ΔChisq) & !is.na(Δdf),
-      paste0(.format_value(ΔChisq, digits), " (", Δdf, ") ", stars),
+    holder[["Δχ²"]] <- ifelse(
+      !is.na(`Δχ²`) & !is.na(Δdf),
+      paste0(.format_value(`Δχ²`, digits), " (", Δdf, ") ", stars),
       NA_character_
     )
-    holder[["p_ΔChisq"]] <- ifelse(!is.na(p_ΔChisq), .format_value(as.numeric(p_ΔChisq), digits), NA)
+    holder[["p_Δχ²"]] <- ifelse(!is.na(`p_Δχ²`), .format_value(as.numeric(`p_Δχ²`), digits), NA)
   }
 
   if (diffTest && n > 1) {
-    diff_cols <- c("ΔChisq", "p_ΔChisq", "ΔCFI", "ΔRMSEA",
+    diff_cols <- c("Δχ²", "p_Δχ²", "ΔCFI", "ΔRMSEA",
                    intersect(colnames(holder), c("ΔAIC", "ΔBIC")))
     holder[1, diff_cols] <- "\u2013"
   }
 
   ## --- STEP 5: Select and rearrange columns based on the 'indices' argument ---
   # Default indices that are always reported.
-  default_indices <- c("Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR")
+  default_indices <- c("Models", "χ²(df)", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR")
   # Default difference metrics to include.
   default_diff    <- if (diffTest && n > 1) {
-    c("ΔChisq","p_ΔChisq","ΔCFI","ΔRMSEA")
+    c("Δχ²","p_Δχ²","ΔCFI","ΔRMSEA")
   } else {
     character(0)
   }

@@ -24,14 +24,10 @@ devtools::install_github("linem7/Lin")
 ### Packages and working directory
 
 ``` r
-library(bruceR)
 library(MplusAutomation)
 library(knitr)
 library(kableExtra)
 library(Lin)
-
-set.wd()
-#> ✔ Set working directory to "D:/Package/Lin"
 ```
 
 ### Mplus result demostration

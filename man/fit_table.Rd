@@ -34,16 +34,16 @@ A data frame containing the fit indices and difference metrics.
 }
 \description{
 This function creates a table of fit indices for one or more models and computes
-difference metrics (e.g., ΔCFI, ΔRMSEA, ΔChisq) between comparative models. If the
+difference metrics (e.g., ΔCFI, ΔRMSEA, Δχ²) between comparative models. If the
 primary chi-square values or degrees of freedom are unavailable, the function will
 automatically switch to a log-likelihood (LL) based approach. When available, the
 LLCorrectionFactor is used; otherwise, the LL difference is computed using LL alone.
 }
 \details{
 The final output always displays the default fit indices:
-\code{"Models", "Chisq", "df", "chisq/df", "CFI", "TLI", "RMSEA", "SRMR"}
+\code{"Models", "χ²/df", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR"}
 and the default difference metrics:
-\code{"ΔChisq", "p_ΔChisq", "ΔCFI", "ΔRMSEA"}. If the user specifies additional indices
+\code{"Δχ²", "p_Δχ²", "ΔCFI", "ΔRMSEA"}. If the user specifies additional indices
 (e.g., "AIC", "BIC") via the \code{indices} argument, then those indices will be included
 in the fit chunk, and their corresponding difference metrics (ΔAIC and/or ΔBIC) will be added
 to the diff chunk.
