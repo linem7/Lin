@@ -312,7 +312,7 @@ coeff_table <- function(
     if ("z"   %in% stat) tbl$z <- .fmt_num(tbl$est_se, digits_coeff)
     if ("p" %in% stat)
       tbl$p <- ifelse(!is.na(tbl$p) & tbl$p < .001,
-                      "<0.001",
+                      "< 0.001",
                       .fmt_num(tbl$p, digits_coeff))
 
     if (stars && "est" %in% stat)
