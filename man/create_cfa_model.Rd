@@ -20,12 +20,23 @@ a string contains the model structure
 A more easy way to create lavaan style cfa model syntax
 }
 \examples{
+# 1) Single-factor example:
+model1 <- create_cfa_model("x", "x{i}", 1:3)
+# which would return model1 <- 'x =~ x1 + x2 + x3`
 
-create_cfa_model("pasu_f", "pasu{i}_f", 5)
+# Evaluate fit and reliability:
+lavaan::cfa(model1, data = data)
+reliability_table(model1, data = mydata, digits = 3)
 
-# For multiple factors, combine them with paste after place into a vector:
-paste(c(create_cfa_model("pasu_f", "pasu{i}_f", 5),
-create_cfa_model("cmu_f", "cmu{i}_f", 3),
-create_cfa_model("att_f", "att{i}_f", 4)), collapse = "\n")
+# 2) Multi-factor model, then reliability:
+model2 <- paste(
+  create_cfa_model("x", "x{i}", 1:5),
+  create_cfa_model("m", "m{i}", 1:3),
+  create_cfa_model("z", "z{i}", 1:4),
+  collapse = "\n"
+)
+# Now get reliability for the combined model:
+reliability_table(model2, data = mydata, digits = 3)
+
 
 }

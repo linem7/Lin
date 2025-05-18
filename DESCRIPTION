@@ -19,6 +19,7 @@ Imports:
     bruceR,
     dplyr,
     ggplot2,
+    glue,
     kableExtra,
     knitr,
     magrittr,

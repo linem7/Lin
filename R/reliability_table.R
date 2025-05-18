@@ -20,6 +20,7 @@
 #' @examples
 #' ## Single-factor CFA
 #' spec_sf <- 'F1 =~ x1 + x2 + x3 + x4'
+#' spec_sf <- create_cfa_model("F1", "x{i}", 1:4)
 #' rel_sf  <- reliability_table(spec_sf, data = my_data, digits = 3)
 #'
 #' ## Multi-factor CFA
@@ -27,6 +28,12 @@
 #'   'F1 =~ x1 + x2 + x3', '\\n',
 #'   'F2 =~ y1 + y2 + y3 + y4'
 #' )
+#' spec_mf <- paste(
+#'   create_cfa_model("F1", "x{i}", 1:3),
+#'   create_cfa_model("F2", "y{i}", 1:4),
+#'   collapse = "\n"
+#' )
+#'
 #' rel_mf <- reliability_table(spec_mf, data = my_data, digits = 2)
 #'
 #' ## Pass multiple specs at once
