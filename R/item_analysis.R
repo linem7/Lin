@@ -119,7 +119,17 @@ item_analysis <- function(data,
   cr_df <- do.call(rbind, lapply(item_names, function(it) {
     high <- tmp %>% filter(PerformanceGroup == "High") %>% pull(.data[[it]])
     low  <- tmp %>% filter(PerformanceGroup == "Low")  %>% pull(.data[[it]])
-    tt   <- t.test(high, low, var.equal = TRUE)
+
+    # prepare for Levene’s test
+    lev_df <- data.frame(
+      value = c(high, low),
+      group = factor(rep(c("High","Low"), c(length(high), length(low))))
+    )
+    p_lev   <- car::leveneTest(value ~ group, data = lev_df)[1, "Pr(>F)"]
+    eq_var  <- (p_lev > 0.05)
+
+    # run the matching t‐test
+    tt   <- t.test(high, low, var.equal = eq_var)
     stars <- if (tt$p.value < 0.001) "***" else
       if (tt$p.value < 0.01)  "**"  else
         if (tt$p.value < 0.05)  "*"   else ""
