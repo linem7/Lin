@@ -5,9 +5,7 @@
 #' modified; all other names remain unchanged.
 #'
 #' @param data A \code{data.frame} or tibble whose column names will be modified.
-#' @param map  A named character vector:
-#'             names(map) = old prefix (or full old name),
-#'             map[]        = new prefix (or full new name).
+#' @param map  A named character vector: use \strong{new_name = "old_name"} (old name should be quoted)
 #'
 #' @return A \code{data.frame} (or tibble) with columns renamed according to \code{map}.
 #'
