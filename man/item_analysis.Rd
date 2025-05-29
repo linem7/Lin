@@ -56,14 +56,16 @@ Finally, all results—including descriptives, CR, α if deleted, CITC, and opti
 \examples{
 data(good_rel)
 data(poor_rel)
+
 # Good‐reliability example
 # good_rel: a data.frame where items 1–5 all load positively on one factor
 item_analysis(good_rel, pattern = "item{i}", indices = 1:5)
+
+# Use Lin::apa() format the final output in html
+item_analysis(good_rel, pattern = "item{i}", indices = 1:5) \%>\% apa()#
 
 # Poor‐reliability example
 # poor_rel: a data.frame with random noise or mixed floor/ceiling effects
 item_analysis(poor_rel, pattern = "item{i}", indices = 1:5, check.keys = TRUE)
 
-# Use Lin::apa() format the final output
-item_analysis(good_rel, pattern = "item{i}", indices = 1:5) \%>\% apa()
 }

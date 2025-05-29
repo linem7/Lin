@@ -30,7 +30,7 @@
 #'
 #' @importFrom dplyr select mutate left_join
 #' @importFrom tibble rownames_to_column
-#' @importFrom psych alpha describe
+#' @importFrom psych describe
 #' @importFrom glue glue
 #'
 #' @details
@@ -46,16 +46,18 @@
 #' @examples
 #' data(good_rel)
 #' data(poor_rel)
+#'
 #' # Good‐reliability example
 #' # good_rel: a data.frame where items 1–5 all load positively on one factor
 #' item_analysis(good_rel, pattern = "item{i}", indices = 1:5)
+#'
+#' # Use Lin::apa() format the final output in html
+#' item_analysis(good_rel, pattern = "item{i}", indices = 1:5) %>% apa()#
 #'
 #' # Poor‐reliability example
 #' # poor_rel: a data.frame with random noise or mixed floor/ceiling effects
 #' item_analysis(poor_rel, pattern = "item{i}", indices = 1:5, check.keys = TRUE)
 #'
-#' # Use Lin::apa() format the final output
-#' item_analysis(good_rel, pattern = "item{i}", indices = 1:5) %>% apa()
 #' @export
 
 item_analysis <- function(data,
@@ -75,7 +77,8 @@ item_analysis <- function(data,
   selected_items <- data %>% dplyr::select(dplyr::all_of(item_names))
 
   #── 2. Compute total α (with any extra args) and get alpha.drop
-  alpha_res       <- psych::alpha(selected_items, ...)
+  psych_alpha <- psych::alpha
+  alpha_res       <- psych_alpha(selected_items, ...)
   ad <- alpha_res$alpha.drop
   if (is.data.frame(ad)) {
     # prefer a column named “raw_alpha” if it exists
