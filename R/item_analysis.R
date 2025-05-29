@@ -95,7 +95,7 @@ item_analysis <- function(data,
   #── 3. Prepare for CR: compute TotalScore & high/low groups
   tmp <- selected_items %>%
     dplyr::mutate(
-      TotalScore = rowSums(across(everything()), na.rm = TRUE),
+      TotalScore = rowMeans(across(everything()), na.rm = TRUE),
       PerformanceGroup = dplyr::case_when(
         TotalScore <= quantile(TotalScore, 0.27, na.rm = TRUE) ~ "Low",
         TotalScore >= quantile(TotalScore, 0.73, na.rm = TRUE) ~ "High",
