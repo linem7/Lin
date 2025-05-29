@@ -32,8 +32,8 @@ df <- data.frame(
 
 # Define mapping: old → new prefixes
 prefix_map <- c(
-  measureA = "mA",
-  factorX  = "fX"
+  mA = "measureA",
+  fX = "factorX"
 )
 
 # Apply rename_map()

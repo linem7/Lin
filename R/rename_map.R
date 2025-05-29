@@ -22,8 +22,8 @@
 #'
 #' # Define mapping: old → new prefixes
 #' prefix_map <- c(
-#'   measureA = "mA",
-#'   factorX  = "fX"
+#'   mA = "measureA",
+#'   fX = "factorX"
 #' )
 #'
 #' # Apply rename_map()
@@ -34,8 +34,8 @@
 #' @export
 rename_map <- function(data, map) {
   nm <- names(data)
-  for (old_pref in names(map)) {
-    new_pref <- map[[old_pref]]
+  for (new_pref in names(map)) {
+    old_pref <- map[[new_pref]]
     nm <- sub(paste0("^", old_pref), new_pref, nm)
   }
   names(data) <- nm
