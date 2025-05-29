@@ -41,7 +41,7 @@
 #' @importFrom effsize cohen.d
 #'
 #' @examples
-#' ## Example using the mock dataset `test_data`
+#' ## Example using the mock dataset `mean_test`
 #' data(mean_test)
 #'
 #' out <- mean_diff(

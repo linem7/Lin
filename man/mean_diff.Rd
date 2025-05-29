@@ -63,7 +63,7 @@ as “A > B”.  To avoid repetition, the IV name appears only in the first row
 of its block.
 }
 \examples{
-## Example using the mock dataset `test_data`
+## Example using the mock dataset `mean_test`
 data(mean_test)
 
 out <- mean_diff(
