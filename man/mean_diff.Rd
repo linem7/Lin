@@ -38,17 +38,15 @@ and effect sizes.  Default is 3.}
 one of "bonferroni (default)", "holm", or "none".}
 }
 \value{
-A named list of data frames.  Each data frame includes:
-\describe{
-  \item{IV}{Grouping variable (blank after the first row).}
-  \item{Category}{Factor level.}
-  \item{N}{Sample size.}
-  \item{Mean (SD)}{Descriptive statistic.}
-  \item{t/F}{Test statistic (with stars if \code{stars = TRUE}).}
-  \item{P}{Exact p value (“< 0.001” when appropriate).}
-  \item{Effect Size}{Cohen’s d or partial η² (absent if \code{effect = FALSE}).}
-  \item{PostHoc}{Significant pairwise contrasts for ANOVA.}
-}
+A named list of data frames with the following columns:
+\item{IV}{Grouping variable (blank after the first row).}
+\item{Category}{Factor level.}
+\item{N}{Sample size.}
+\item{Mean (SD)}{Descriptive statistic.}
+\item{t/F}{Test statistic (with stars if \code{stars = TRUE}).}
+\item{P}{Exact p value (“< 0.001” when appropriate).}
+\item{Effect Size}{Cohen’s d or partial η² (absent if \code{effect = FALSE}).}
+\item{PostHoc}{Significant pairwise contrasts for ANOVA.}
 }
 \description{
 \code{mean_diff()} evaluates mean differences for one or more dependent variables
@@ -66,12 +64,12 @@ of its block.
 }
 \examples{
 ## Example using the mock dataset `test_data`
-data(test_data)
+data(mean_test)
 
 out <- mean_diff(
   dv = c("var1", "var2"),
   iv = c("gender", "grade", "area"),
-  data  = test_data,
+  data  = mean_test,
   stars = TRUE,
   effect = TRUE,
   p.adjust.method = "holm"
