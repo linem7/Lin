@@ -63,5 +63,4 @@ item_analysis(good_rel, pattern = "item{i}", indices = 1:5)
 # Poor‐reliability example
 # good_poor: a data.frame with random noise or mixed floor/ceiling effects
 item_analysis(good_poor, pattern = "item{i}", indices = 1:5, check.keys = TRUE)
-
 }
