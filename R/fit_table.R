@@ -67,7 +67,7 @@ fit_table <- function(...,
     }, character(1))
   }
 
-  ## p-value formatting (vectorised)
+  ## p-value formatting (always 3‑digit when printed)
   .fmt_p <- function(p, d = 3) {
     vapply(p, function(pp) {
       if (is.na(pp)) return(NA_character_)
@@ -156,7 +156,7 @@ fit_table <- function(...,
     holder$`Δχ²`  <- ifelse(!is.na(delta_chisq) & !is.na(delta_df),
                             paste0(.fnum(delta_chisq, digits),
                                    " (", delta_df, ") ", stars), NA)
-    holder$`p_Δχ²` <- .fmt_p(p_delta_chisq, digits)
+    holder$`p_Δχ²` <- .fmt_p(p_delta_chisq)  # always 3‑digit output
 
     holder[1, c("Δχ²","p_Δχ²","ΔCFI","ΔRMSEA","ΔAIC","ΔBIC")] <- "—"
   }
@@ -172,4 +172,5 @@ fit_table <- function(...,
 
   holder[, unique(c(base_idx, add_idx, diff_idx)), drop = FALSE]
 }
+
 
