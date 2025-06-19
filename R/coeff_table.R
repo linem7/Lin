@@ -252,6 +252,13 @@ coeff_table <- function(
   .fmt_num <- function(x, digits = 3)
     ifelse(is.na(x), NA_character_, sprintf(paste0("%.", digits, "f"), x))
 
+  .fmt_p <- function(p) {
+    ifelse(
+      is.na(p), NA_character_,
+      ifelse(p < .001, "< .001", sub("^0", "", sprintf("%.3f", p)))
+    )
+  }
+
   .add_stars <- function(est, p) {
     pieces <- ifelse(is.na(p), "",
                      ifelse(p < .001, "***",
@@ -306,17 +313,15 @@ coeff_table <- function(
       tbl <- tbl[ !bad , ]
     }
 
-    ## numeric formatting ------------------------------------------------------
+    ## ---------- numeric & p-value formatting  ------------------------------- ##
     if ("est" %in% stat) tbl$est <- .fmt_num(tbl$est, digits_coeff)
     if ("se"  %in% stat) tbl$se  <- .fmt_num(tbl$se,  digits_coeff)
-    if ("z"   %in% stat) tbl$z <- .fmt_num(tbl$est_se, digits_coeff)
-    if ("p" %in% stat)
-      tbl$p <- ifelse(!is.na(tbl$p) & tbl$p < .001,
-                      "< 0.001",
-                      .fmt_num(tbl$p, digits_coeff))
+    if ("z"   %in% stat) tbl$z   <- .fmt_num(tbl$est_se, digits_coeff)
 
-    if (stars && "est" %in% stat)
-      tbl$est <- .add_stars(tbl$est, tbl$p)
+    # keep numeric copy for stars, then format display p ----------------------- # <<< CHANGED
+    p_numeric <- tbl$p                                                     # <<< CHANGED
+    if (stars && "est" %in% stat) tbl$est <- .add_stars(tbl$est, p_numeric) # <<< CHANGED
+    if ("p" %in% stat) tbl$p <- .fmt_p(p_numeric)                           # <<< CHANGED
 
     ## keep only needed columns + rename per‑model -----------------------------
     keep <- c("lhs","op","rhs", stat)
@@ -403,6 +408,24 @@ coeff_table <- function(
   #  4. Fill first stat column with values, others blank
   # Then full_join all models into `merged_fit`.
 
+  # ---- helper to format fit indices ---------------------------------------- #
+  .fmt_fit_val <- function(label, val, digits = 2) {
+    if (is.na(val)) return("")
+
+    # build the sprintf pattern once
+    pat <- paste0("%.", digits, "f")
+
+    if (label %in% c("CFI", "TLI", "RMSEA", "SRMR")) {
+      if (val >= 1) return(sprintf(pat, val))          # e.g., 1.000 when digits = 3
+      return(sub("^0", "", sprintf(pat, val)))         # .95 or .954
+    }
+
+    if (label == "χ²/df")
+      return(sprintf(pat, val))                        # keep leading zero
+
+    return(sprintf(pat, val))                          # AIC, BIC, LL, etc.
+  }
+
   # Processing function
   .fit_block <- function(model_obj, model_label,
                          stat, indices, digits_fit,
@@ -434,11 +457,16 @@ coeff_table <- function(
 
     lbl <- ifelse(want %in% names(rename_map), rename_map[want], want)
 
-    show <- .fmt_num(raw, digits_fit)
-    show[lbl=="df"] <- ifelse(is.na(raw[lbl=="df"]), "",
-                              as.integer(raw[lbl=="df"]))
+    # ---------- formatting step ---------------------------------------------- #
+    show <- vapply(seq_along(lbl),
+                   function(i) .fmt_fit_val(lbl[i], raw[i], digits_fit),
+                   character(1))
+
+    # integer treatment for df / Parameters (kept from original) --------------
+    show[lbl == "df"] <- ifelse(is.na(raw[lbl == "df"]), "",
+                                as.integer(raw[lbl == "df"]))
     if ("Parameters" %in% want)
-      show[lbl=="Parameters"] <- as.integer(raw[lbl=="Parameters"])
+      show[lbl == "Parameters"] <- as.integer(raw[lbl == "Parameters"])
 
     ## 2. build skeleton (ann_cols + lhs/op/rhs) -------------------------------
     skel <- data.frame(matrix("", nrow = length(lbl),
@@ -554,3 +582,4 @@ coeff_table <- function(
     kableExtra::row_spec(nrow(merged_coeff), extra_css="border-bottom: 1px solid;") %>%
     kableExtra::footnote(general = notes, footnote_as_chunk = TRUE)
 }
+
