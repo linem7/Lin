@@ -74,8 +74,8 @@ coeff_table <- function(
     ## basic appearance ---------------------------------------------------------
     stat          = c("est", "se", "p"),     # statistics to print
     indices       = character(0),            # extra fit indices
-    digits_coeff  = 3,
-    digits_fit    = 3,
+    digits_coeff  = 2,
+    digits_fit    = 2,
     standardized  = FALSE,
     stars         = TRUE,
     ## rows / columns to keep ---------------------------------------------------
