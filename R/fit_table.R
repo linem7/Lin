@@ -34,252 +34,142 @@
 #'
 #' @export
 fit_table <- function(...,
-                      indices = character(0),  # additional indices to report
-                      ref = c("last", "first"),
-                      diffTest = TRUE,
-                      digits = 3,
-                      model_names = NULL) {
+                      indices      = character(0),   # extra indices to show
+                      ref          = c("last", "first"),
+                      diffTest     = TRUE,
+                      digits       = 2,
+                      model_names  = NULL) {
 
   ref <- match.arg(ref)
-
-  ## --- STEP 0: Flatten input objects into a single list of models ---
   args <- list(...)
+
+  ## ---------------- helpers ---------------------------------------------
+  # remove leading zero for both positive (0.83 → .83) and negative (-0.83 → -.83)
+  .strip0 <- function(x) sub("^(-?)0\\.", "\\1.", x)
+  .fnum   <- function(x, d) sprintf(paste0("%.", d, "f"), x)
+
+  ## APA-style for CFI / TLI / RMSEA / SRMR (vectorised)
+  .fmt_fit <- function(x, d) {
+    vapply(x, function(xx) {
+      if (is.na(xx)) return(NA_character_)
+      out <- .fnum(xx, d)
+      if (xx < 1) out <- .strip0(out)
+      out
+    }, character(1))
+  }
+
+  ## APA-style for Δ columns (vectorised, never "< .001")
+  .fmt_diff <- function(x, d) {
+    vapply(x, function(xx) {
+      if (is.na(xx)) return(NA_character_)
+      if (abs(xx) < 10^(-d)) return(paste0(".", paste(rep("0", d), collapse = "")))
+      .strip0(.fnum(xx, d))
+    }, character(1))
+  }
+
+  ## p-value formatting (vectorised)
+  .fmt_p <- function(p, d = 3) {
+    vapply(p, function(pp) {
+      if (is.na(pp)) return(NA_character_)
+      if (pp < .001) return("< .001")
+      .strip0(.fnum(pp, d))
+    }, character(1))
+  }
+
+  ## --------------- gather model objects ----------------------------------
   modelList <- list()
   for (obj in args) {
     if (is.list(obj) && !("summaries" %in% names(obj))) {
-      for (m in obj) {
-        if (!("summaries" %in% names(m))) {
-          stop("One of the models in the provided list does not contain a 'summaries' element.")
-        }
-        modelList[[length(modelList) + 1]] <- m
-      }
+      modelList <- c(modelList, obj)
     } else if (is.list(obj) && ("summaries" %in% names(obj))) {
       modelList[[length(modelList) + 1]] <- obj
-    } else {
-      stop("Input is not a valid model object or list of models.")
-    }
+    } else stop("Input is not a valid model or list of models.")
+  }
+  n <- length(modelList); if (n == 0) stop("No models provided.")
+
+  ## --------------- holder ------------------------------------------------
+  def_cols <- c("Models", "χ²(df)", "χ²/df",
+                "CFI", "TLI", "RMSEA", "SRMR",
+                "LL", "Parameters", "AIC", "BIC")
+  holder   <- as.data.frame(matrix(NA, n, length(def_cols)),
+                            stringsAsFactors = FALSE)
+  names(holder) <- def_cols
+
+  ## --------------- fill fit indices --------------------------------------
+  for (i in seq_len(n)) {
+    sm <- as.data.frame(modelList[[i]]$summaries)
+    holder$Models[i] <- if (!is.null(model_names)) model_names[i] else sm$Filename[1]
+
+    ## χ²(df) + χ²/df
+    cs <- as.numeric(sm$ChiSqM_Value[1]); df <- as.numeric(sm$ChiSqM_DF[1])
+    if (!is.na(cs) && !is.na(df))
+      holder$`χ²(df)`[i] <- paste0(.fnum(cs, digits), " (", df, ")")
+    if (!is.na(cs) && !is.na(df) && df != 0)
+      holder$`χ²/df`[i] <- .fnum(cs / df, digits)
+
+    ## 4 main fit indices
+    holder$CFI[i]   <- .fmt_fit(as.numeric(sm$CFI[1]),            digits)
+    holder$TLI[i]   <- .fmt_fit(as.numeric(sm$TLI[1]),            digits)
+    holder$RMSEA[i] <- .fmt_fit(as.numeric(sm$RMSEA_Estimate[1]), digits)
+    holder$SRMR[i]  <- .fmt_fit(as.numeric(sm$SRMR[1]),           digits)
+
+    ## ICs & parameters
+    holder$LL[i]         <- .fnum(as.numeric(sm$LL[1]), digits)
+    holder$Parameters[i] <- as.integer(sm$Parameters[1])
+    holder$AIC[i]        <- .fnum(as.numeric(sm$AIC[1]), digits)
+    holder$BIC[i]        <- .fnum(as.numeric(sm$BIC[1]), digits)
   }
 
-  ## --- STEP1: Validation for each arguments
-  n <- length(modelList)
-  if(n == 0) stop("No models provided.")
-  if (!is.character(indices))
-    stop("`indices` must be a character vector, extra index including LL, Parameters, AIC, and BIC.")
-  if (!is.logical(diffTest) || length(diffTest) != 1)
-    stop("`diffTest` must be a single TRUE or FALSE.")
-  if (!is.numeric(digits) || length(digits) != 1 || digits < 0)
-    stop("`digits` must be a single non‐negative number.")
-
-  if (!is.null(model_names)) {
-    if (!is.character(model_names))
-      stop("`model_names` must be a character vector.")
-    if (length(model_names) != n)
-      stop("`model_names` must have length equal to the number of models (", n, ").")
-  }
-
-  #––– Vectorized helper –––
-  .format_value <- function(x, digits) {
-    x_num    <- as.numeric(x)
-    thresh   <- 10^(-digits)
-    thresh_s <- sprintf(paste0("%.", digits, "f"), thresh)
-    vapply(x_num, function(xi) {
-      if (is.na(xi)) return(NA_character_)
-      if (abs(xi) < thresh) paste0("<", thresh_s)
-      else                 sprintf(paste0("%.", digits, "f"), xi)
-    }, FUN.VALUE = character(1), USE.NAMES = FALSE)
-  }
-
-  ## --- STEP 2: Create an empty data.frame holder with default columns ---
-  # Note: "Parameters" follows "LL".
-  default_cols <- c("Models", "χ²(df)", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR",
-                    "LL", "Parameters", "AIC", "BIC")
-  holder <- data.frame(matrix(NA, nrow = n, ncol = length(default_cols)),
-                       stringsAsFactors = FALSE)
-  colnames(holder) <- default_cols
-
-  ## --- STEP 3: Populate the holder for each model ---
-
-  for(i in seq_len(n)) {
-    summ <- as.data.frame(modelList[[i]][["summaries"]])
-
-    # Model name: prefer model_names over Filename
-    holder$Models[i] <- if (!is.null(model_names)) {
-      model_names[i]
-    } else if ("Filename" %in% names(summ)) {
-      summ$Filename[1]
-    } else {
-      NA
-    }
-
-    if("ChiSqM_Value" %in% names(summ)) {
-      chisq_val <- sprintf(paste0("%.", digits, "f"), as.numeric(summ$ChiSqM_Value[1]))
-    } else {
-      chisq_val <- NA
-    }
-
-    df_val <- if("ChiSqM_DF" %in% names(summ)) as.numeric(summ$ChiSqM_DF[1]) else NA
-
-    # Combine chi-square and df into a single column (χ²(df))
-    holder$`χ²(df)`[i] <- if (!is.na(chisq_val) && !is.na(df_val)) {
-      paste0(chisq_val, " (", df_val, ")")
-    } else {
-      NA
-    }
-
-    # Compute χ²/df if both chi-square and df are available.
-    {
-      chisq_raw <- if("ChiSqM_Value" %in% names(summ)) summ$ChiSqM_Value[1] else NA
-      df_raw    <- if("ChiSqM_DF" %in% names(summ)) summ$ChiSqM_DF[1] else NA
-
-      chisq_val <- suppressWarnings(as.numeric(as.character(chisq_raw)))
-      df_val    <- suppressWarnings(as.numeric(as.character(df_raw)))
-
-      if (!is.na(chisq_val) && !is.na(df_val)) {
-        # Handle zero degrees of freedom
-        if (df_val == 0) {
-          # If both chisq and df are zero, ratio is 0; otherwise, Inf.
-          ratio <- Inf
-        } else {
-          ratio <- chisq_val / df_val
-        }
-        holder[["χ²/df"]][i] <- .format_value(as.numeric(ratio), digits)
-      } else {
-        holder[["χ²/df"]][i] <- NA
-      }
-    }
-
-    # Other fit indices
-    holder$CFI[i]   <- if("CFI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$CFI[1])) else NA
-    holder$TLI[i]   <- if("TLI" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$TLI[1])) else NA
-    holder$RMSEA[i] <- if("RMSEA_Estimate" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$RMSEA_Estimate[1])) else NA
-    holder$SRMR[i]  <- if("SRMR" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$SRMR[1])) else NA
-
-    # Information criteria and parameters (Parameters follows LL)
-    holder$LL[i]         <- if("LL" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$LL[1])) else NA
-    holder$Parameters[i] <- if("Parameters" %in% names(summ)) as.numeric(summ$Parameters[1]) else NA
-    holder$AIC[i]        <- if("AIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$AIC[1])) else NA
-    holder$BIC[i]        <- if("BIC" %in% names(summ)) sprintf(paste0("%.", digits, "f"), as.numeric(summ$BIC[1])) else NA
-  }
-
-
-  ## --- STEP 4: Compute difference metrics (if diffTest is TRUE) ---
-  if(diffTest && n > 1) {
-    # Preallocate difference vectors.
-    ΔCFI      <- rep(NA, n)
-    ΔRMSEA    <- rep(NA, n)
-    ΔAIC      <- rep(NA, n)
-    ΔBIC      <- rep(NA, n)
-    `Δχ²`   <- rep(NA, n)
-    Δdf      <- rep(NA, n)
-    `p_Δχ²` <- rep(NA, n)
-
-    for(i in 2:n) {
-      # Choose reference row based on 'ref'
-      ref_row <- if(ref == "first") 1 else i - 1
-
-      # Retrieve raw summaries for current and reference models.
-      summ_current <- as.data.frame(modelList[[i]][["summaries"]])
-      summ_ref     <- as.data.frame(modelList[[ref_row]][["summaries"]])
-
-      # Compute differences for CFI, RMSEA, AIC, and BIC using raw numeric values.
-      if("CFI" %in% names(summ_current) && "CFI" %in% names(summ_ref))
-        ΔCFI[i]   <- as.numeric(summ_current$CFI[1]) - as.numeric(summ_ref$CFI[1])
-      if("RMSEA_Estimate" %in% names(summ_current) && "RMSEA_Estimate" %in% names(summ_ref))
-        ΔRMSEA[i] <- as.numeric(summ_current$RMSEA_Estimate[1]) - as.numeric(summ_ref$RMSEA_Estimate[1])
-      if("AIC" %in% names(summ_current) && "AIC" %in% names(summ_ref))
-        ΔAIC[i]   <- as.numeric(summ_current$AIC[1]) - as.numeric(summ_ref$AIC[1])
-      if("BIC" %in% names(summ_current) && "BIC" %in% names(summ_ref))
-        ΔBIC[i]   <- as.numeric(summ_current$BIC[1]) - as.numeric(summ_ref$BIC[1])
-
-      ## --- Chi-square difference ---
-      # Use chi-square and df if available; otherwise, use LL-based approach.
-      if("ChiSqM_Value" %in% names(summ_current) && "ChiSqM_Value" %in% names(summ_ref) &&
-         "ChiSqM_DF" %in% names(summ_current) && "ChiSqM_DF" %in% names(summ_ref)) {
-        delta_chisq  <- as.numeric(summ_current$ChiSqM_Value[1]) - as.numeric(summ_ref$ChiSqM_Value[1])
-        delta_df_val <- as.numeric(summ_current$ChiSqM_DF[1]) - as.numeric(summ_ref$ChiSqM_DF[1])
-      } else if("LL" %in% names(summ_current) && "LL" %in% names(summ_ref) &&
-                "Parameters" %in% names(summ_current) && "Parameters" %in% names(summ_ref)) {
-        if(!is.null(summ_current[["LLCorrectionFactor"]]) &&
-           !is.null(summ_ref[["LLCorrectionFactor"]])) {
-          cf0 <- as.numeric(summ_ref$LLCorrectionFactor[1])
-          cf1 <- as.numeric(summ_current$LLCorrectionFactor[1])
-          cd <- (as.numeric(summ_ref$Parameters[1]) * cf0 - as.numeric(summ_current$Parameters[1]) * cf1) /
-            (as.numeric(summ_ref$Parameters[1]) - as.numeric(summ_current$Parameters[1]))
-          delta_chisq <- -2 * (as.numeric(summ_ref$LL[1]) - as.numeric(summ_current$LL[1])) / cd
-        } else {
-          delta_chisq <- -2 * (as.numeric(summ_ref$LL[1]) - as.numeric(summ_current$LL[1]))
-        }
-        delta_df_val <- as.numeric(summ_current$Parameters[1]) - as.numeric(summ_ref$Parameters[1])
-      } else {
-        delta_chisq  <- NA
-        delta_df_val <- NA
-      }
-
-      `Δχ²`[i] <- delta_chisq
-      Δdf[i]    <- delta_df_val
-      p_val <- if(!is.na(delta_df_val) && delta_df_val > 0 && !is.na(delta_chisq))
-        1 - pchisq(delta_chisq, df = delta_df_val) else NA
-      `p_Δχ²`[i] <- p_val
-    }
-
-    # Append formatted difference metrics to the holder.
-    holder[["ΔCFI"]]   <- .format_value(ΔCFI,   digits)
-    holder[["ΔRMSEA"]] <- .format_value(ΔRMSEA, digits)
-    if("AIC" %in% colnames(holder)) {
-      holder[["ΔAIC"]] <- .format_value(ΔAIC, digits)
-    }
-    if("BIC" %in% colnames(holder)) {
-      holder[["ΔBIC"]] <- .format_value(ΔBIC, digits)
-    }
-
-    stars <- vapply(`p_Δχ²`, function(p) {
-      if      (is.na(p))      ""
-      else if (p < 0.001)     "***"
-      else if (p < 0.01)      "**"
-      else if (p < 0.05)      "*"
-      else if (p < 0.1)       "."
-      else                    ""
-    }, FUN.VALUE = character(1))
-
-    holder[["Δχ²"]] <- ifelse(
-      !is.na(`Δχ²`) & !is.na(Δdf),
-      paste0(.format_value(`Δχ²`, digits), " (", Δdf, ") ", stars),
-      NA_character_
-    )
-    holder[["p_Δχ²"]] <- ifelse(!is.na(`p_Δχ²`), .format_value(as.numeric(`p_Δχ²`), digits), NA)
-  }
-
+  ## --------------- differences -------------------------------------------
   if (diffTest && n > 1) {
-    diff_cols <- c("Δχ²", "p_Δχ²", "ΔCFI", "ΔRMSEA",
-                   intersect(colnames(holder), c("ΔAIC", "ΔBIC")))
-    holder[1, diff_cols] <- "\u2013"
+    delta_CFI   <- delta_RMSEA <- delta_AIC <- delta_BIC <-
+      delta_chisq <- delta_df <- p_delta_chisq <- rep(NA_real_, n)
+
+    for (i in 2:n) {
+      ref_i <- if (ref == "first") 1 else i - 1
+      s1    <- as.data.frame(modelList[[i]]$summaries)
+      s0    <- as.data.frame(modelList[[ref_i]]$summaries)
+
+      delta_CFI[i]   <- as.numeric(s1$CFI[1])            - as.numeric(s0$CFI[1])
+      delta_RMSEA[i] <- as.numeric(s1$RMSEA_Estimate[1]) - as.numeric(s0$RMSEA_Estimate[1])
+      delta_AIC[i]   <- as.numeric(s1$AIC[1])            - as.numeric(s0$AIC[1])
+      delta_BIC[i]   <- as.numeric(s1$BIC[1])            - as.numeric(s0$BIC[1])
+
+      if (!is.na(s1$ChiSqM_Value[1]) && !is.na(s0$ChiSqM_Value[1])) {
+        delta_chisq[i] <- as.numeric(s1$ChiSqM_Value[1]) - as.numeric(s0$ChiSqM_Value[1])
+        delta_df[i]    <- as.numeric(s1$ChiSqM_DF[1])    - as.numeric(s0$ChiSqM_DF[1])
+        if (!is.na(delta_df[i]) && delta_df[i] > 0)
+          p_delta_chisq[i] <- 1 - pchisq(delta_chisq[i], delta_df[i])
+      }
+    }
+
+    holder$`ΔCFI`   <- .fmt_diff(delta_CFI,   digits)
+    holder$`ΔRMSEA` <- .fmt_diff(delta_RMSEA, digits)
+    holder$`ΔAIC`   <- .fmt_diff(delta_AIC,   digits)
+    holder$`ΔBIC`   <- .fmt_diff(delta_BIC,   digits)
+
+    stars <- vapply(p_delta_chisq, function(p)
+      if (is.na(p)) "" else if (p < .001) "***"
+      else if (p < .01) "**" else if (p < .05) "*" else if (p < .1) "." else "",
+      character(1))
+
+    holder$`Δχ²`  <- ifelse(!is.na(delta_chisq) & !is.na(delta_df),
+                            paste0(.fnum(delta_chisq, digits),
+                                   " (", delta_df, ") ", stars), NA)
+    holder$`p_Δχ²` <- .fmt_p(p_delta_chisq, digits)
+
+    holder[1, c("Δχ²","p_Δχ²","ΔCFI","ΔRMSEA","ΔAIC","ΔBIC")] <- "—"
   }
 
-  ## --- STEP 5: Select and rearrange columns based on the 'indices' argument ---
-  # Default indices that are always reported.
-  default_indices <- c("Models", "χ²(df)", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR")
-  # Default difference metrics to include.
-  default_diff    <- if (diffTest && n > 1) {
-    c("Δχ²","p_Δχ²","ΔCFI","ΔRMSEA")
-  } else {
-    character(0)
-  }
+  ## --------------- column selection --------------------------------------
+  base_idx <- c("Models","χ²(df)","χ²/df","CFI","TLI","RMSEA","SRMR")
+  diff_idx <- if (diffTest && n > 1)
+    c("Δχ²","p_Δχ²","ΔCFI","ΔRMSEA") else character(0)
 
-  if(length(indices) > 0) {
-    # If "AIC" is mentioned, add both AIC and its difference; similarly for "BIC".
-    extra_diff <- c()
-    if("AIC" %in% indices) extra_diff <- c(extra_diff, "ΔAIC")
-    if("BIC" %in% indices) extra_diff <- c(extra_diff, "ΔBIC")
-    fit_cols <- union(default_indices, indices)
-    change_cols <- union(default_diff, extra_diff)
-    final_cols <- union(fit_cols, change_cols)
-    final_holder <- holder[, final_cols, drop = FALSE]
-  } else {
-    # If no indices provided, show default fit indices and default difference metrics.
-    final_holder <- holder[, unique(c(default_indices, default_diff)), drop = FALSE]
-  }
+  add_idx  <- indices
+  if ("AIC" %in% add_idx) diff_idx <- union(diff_idx, "ΔAIC")
+  if ("BIC" %in% add_idx) diff_idx <- union(diff_idx, "ΔBIC")
 
-  rownames(final_holder) <- NULL
-  return(final_holder)
+  holder[, unique(c(base_idx, add_idx, diff_idx)), drop = FALSE]
 }
 

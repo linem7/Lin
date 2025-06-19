@@ -9,7 +9,7 @@ fit_table(
   indices = character(0),
   ref = c("last", "first"),
   diffTest = TRUE,
-  digits = 3,
+  digits = 2,
   model_names = NULL
 )
 }
