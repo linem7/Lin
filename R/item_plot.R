@@ -73,9 +73,11 @@ item_plot <- function(data,
 
   ## --- 4. Add total-score panel if requested --------------------------------
   if (total && length(item_names) > 1) {
-    tot <- dplyr::mutate(selected_items,
-                         Total = rowMeans(dplyr::across(tidyselect::everything()),
-                                          na.rm = TRUE))
+    tot <- dplyr::mutate(
+      selected_items,
+      Total = rowMeans(dplyr::across(tidyselect::everything()),
+                       na.rm = FALSE)           # <- list-wise
+    )
     long_df <- dplyr::bind_rows(
       long_df,
       dplyr::select(tot, Total) %>%
@@ -84,7 +86,9 @@ item_plot <- function(data,
     )
   }
 
-  ## --- 5. Plot ---------------------------------------------------------------
+  ## -- 5. Drop non-finite rows & plot ---------------------------------------
+  long_df <- dplyr::filter(long_df, is.finite(score))
+
   ggplot2::ggplot(long_df, ggplot2::aes(x = score)) +
     ggplot2::geom_histogram(color    = "black",
                             binwidth = binwidth,
