@@ -10,7 +10,8 @@ item_plot(
   indices = NULL,
   digits = 2,
   total = TRUE,
-  binwidth = 1
+  binwidth = 1,
+  title = "Distribution of items"
 )
 }
 \arguments{

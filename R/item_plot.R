@@ -45,7 +45,8 @@ item_plot <- function(data,
                       indices  = NULL,
                       digits   = 2,
                       total    = TRUE,
-                      binwidth = 1) {
+                      binwidth = 1,
+                      title = "Distribution of items") {
 
   ## --- 1. Resolve item names -------------------------------------------------
   if (!is.null(pattern) && grepl("\\{i\\}", pattern) && !is.null(indices)) {
@@ -90,10 +91,9 @@ item_plot <- function(data,
   long_df <- dplyr::filter(long_df, is.finite(score))
 
   ggplot2::ggplot(long_df, ggplot2::aes(x = score)) +
-    ggplot2::geom_histogram(color    = "black",
-                            binwidth = binwidth,
-                            boundary = 0.5) +
+    ggplot2::geom_histogram(binwidth = binwidth, color = "black") +
     ggplot2::facet_grid(item ~ .) +
-    ggplot2::theme_bw() +
+    ggplot2::labs(title = title, x = "Score", y = "Count") +
+    ggplot2::theme_grey() +
     ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.01, 0.01)))
 }
