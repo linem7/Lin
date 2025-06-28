@@ -116,16 +116,16 @@
 sem_perms <- function(
     data,
     latent_defs,
-    roles = c("x", "m1", "m2", "y"),          # Roles to permute
-    covariate = c("gender", "age"),             # Covariates for all models
+    roles = NULL,          # Roles to permute
+    covariate = NULL,             # Covariates for all models
     extra_var = NULL,
-    exclusion = exclusive_groups,                   # Exclusive-group constraints
-    fix = fixed_groups,                             # Fixed-group constraints
+    exclusion = NULL,                   # Exclusive-group constraints
+    fix = NULL,                             # Fixed-group constraints
     analysis = "esti = ml;",                      # Mplus analysis command
     structural_tpl,                                 # User-provided structural template
     output = "stand;",                            # Mplus output command
-    out_dir = "./Mplus",
-    parameters = "med",
+    out_dir = ".",
+    parameters = NULL,
     ...
 ) {
   # ------------------------------

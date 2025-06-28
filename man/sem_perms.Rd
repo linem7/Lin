@@ -7,16 +7,16 @@
 sem_perms(
   data,
   latent_defs,
-  roles = c("x", "m1", "m2", "y"),
-  covariate = c("gender", "age"),
+  roles = NULL,
+  covariate = NULL,
   extra_var = NULL,
-  exclusion = exclusive_groups,
-  fix = fixed_groups,
+  exclusion = NULL,
+  fix = NULL,
   analysis = "esti = ml;",
   structural_tpl,
   output = "stand;",
-  out_dir = "./Mplus",
-  parameters = "med",
+  out_dir = ".",
+  parameters = NULL,
   ...
 )
 }
