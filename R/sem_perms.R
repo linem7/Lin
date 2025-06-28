@@ -161,22 +161,37 @@ sem_perms <- function(
 
   # 3. Helper: extract parameters
   retrieveNewParams <- function(res, parameters) {
-    parameters <- toupper(parameters)
+    # 1. Sanity check
+    if (missing(parameters) || length(parameters) == 0) {
+      stop("`parameters` must be a non-empty character vector.")
+    }
+    parameters  <- toupper(parameters)
     model_names <- names(res)
-    result_list <- lapply(seq_along(res), function(i) {
-      mod <- res[[i]]
-      df_params <- mod$parameters$unstandardized
-      subdf <- df_params[df_params$param %in% parameters, ]
-      pvals <- subdf$pval[match(parameters, subdf$param)]
+    n_mod       <- length(res)
 
-      out <- data.frame(Models = model_names[i], stringsAsFactors = FALSE)
-      for (j in seq_along(parameters)) {
-        col <- parameters[j]
-        out[[col]] <- pvals[j]
+    # 2. Pre-allocate output: one row per model, one col per parameter
+    out_df <- data.frame(Models = model_names, stringsAsFactors = FALSE)
+    for (par in parameters) {
+      out_df[[par]] <- NA_real_
+    }
+
+    # 3. Fill in p-values where present
+    for (i in seq_len(n_mod)) {
+      dfp <- res[[i]]$parameters$unstandardized
+
+      # if there's a pval column, try to match each parameter
+      if ("pval" %in% names(dfp)) {
+        for (par in parameters) {
+          idx <- which(dfp$param == par)
+          if (length(idx)) {
+            out_df[i, par] <- dfp$pval[idx[1]]
+          }
+        }
       }
-      out
-    })
-    do.call(rbind, result_list)
+      # otherwise we just leave the NAs in place
+    }
+
+    out_df
   }
 
   # ------------------------------
@@ -302,10 +317,29 @@ sem_perms <- function(
     stringsAsFactors = FALSE
   )
 
+  # ------------------------------
+  # 7. Extract Error message
+  # ------------------------------
+  err_counts <- vapply(
+    res,
+    function(m) length(m$errors),
+    integer(1)
+  )
+
+  err_df <- data.frame(
+    Models  = names(err_counts),
+    Error = factor(
+      ifelse(err_counts > 0, "Yes", "Not"),
+      levels = c("Yes", "Not")
+    ),
+    stringsAsFactors = FALSE
+  )
+
   # Stitch everything together
   final_df <- fit_tb %>%
     dplyr::left_join(coeff_tb, by = "Models") %>%
-    dplyr::left_join(warn_df,  by = "Models")
+    dplyr::left_join(warn_df,  by = "Models") %>%
+    dplyr::left_join(err_df,  by = "Models")
 
   # Explicitly return the combined results
   return(final_df)
