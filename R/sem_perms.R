@@ -279,7 +279,7 @@ sem_perms <- function(
   # 7. Extract specified parameters
   # ------------------------------
 
-  coeff_tb <- retrieveNewParams(parameters = parameters)
+  coeff_tb <- retrieveNewParams(res = res, parameters = parameters)
   final_df <- dplyr::left_join(fit_tb, coeff_tb, by = "Models")
 
   # Explicitly return the combined results
