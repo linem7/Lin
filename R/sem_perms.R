@@ -273,14 +273,39 @@ sem_perms <- function(
   # ------------------------------
   run_with_progress(out_dir)
   res <- MplusAutomation::readModels(out_dir, what = c("warn_err", "summaries", "parameters"))
+
+  # ------------------------------
+  # 7. Extract Model fit
+  # ------------------------------
   fit_tb <- fit_table(res, diffTest = FALSE)
 
   # ------------------------------
   # 7. Extract specified parameters
   # ------------------------------
-
   coeff_tb <- retrieveNewParams(res = res, parameters = parameters)
-  final_df <- dplyr::left_join(fit_tb, coeff_tb, by = "Models")
+
+  # ------------------------------
+  # 7. Extract warning message
+  # ------------------------------
+  warn_counts <- vapply(
+    res,
+    function(m) length(m$warnings),
+    integer(1)
+  )
+
+  warn_df <- data.frame(
+    Models  = names(warn_counts),
+    Warning = factor(
+      ifelse(warn_counts > 0, "Yes", "Not"),
+      levels = c("Yes", "Not")
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  # Stitch everything together
+  final_df <- fit_tb %>%
+    dplyr::left_join(coeff_tb, by = "Models") %>%
+    dplyr::left_join(warn_df,  by = "Models")
 
   # Explicitly return the combined results
   return(final_df)
