@@ -31,6 +31,9 @@
 #'                        (default `"./Mplus/med"`).
 #' @param parameters     Character vector of parameter labels whose p‐values
 #'                        you wish to extract (i.e., `"med"`).
+#' @param minimal_run    Logical; if `TRUE`, only the first `max_run` permutations are generated and executed,
+#'                        for a quick preview.
+#' @param max_run        Integer; maximum number of models to generate and run when `minimal_run = TRUE`.
 #' @param ...            Additional arguments (currently unused).
 #'
 #' @return A data.frame combining Mplus fit indices (via `fit_table()`) and
@@ -126,6 +129,8 @@ sem_perms <- function(
     output = "stand;",                            # Mplus output command
     out_dir = ".",
     parameters = NULL,
+    minimal_run = TRUE,
+    max_run = 10,
     ...
 ) {
   # ------------------------------
@@ -203,6 +208,12 @@ sem_perms <- function(
       perm_df <- perm_df %>%
         dplyr::filter(.data[[col]] %in% allowed)  # restrict specific roles
     }
+  }
+
+  # 4. Optionally reduce to a minimal run set
+  if (isTRUE(minimal_run)) {
+    n_keep <- min(nrow(perm_df), max_run)
+    perm_df <- perm_df[seq_len(n_keep), , drop = FALSE]
   }
 
   # ------------------------------

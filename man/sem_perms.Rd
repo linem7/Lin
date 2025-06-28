@@ -17,6 +17,8 @@ sem_perms(
   output = "stand;",
   out_dir = ".",
   parameters = NULL,
+  minimal_run = TRUE,
+  max_run = 10,
   ...
 )
 }
@@ -57,6 +59,11 @@ for one slot (e.g. `list(x = c("x","w"))`).}
 
 \item{parameters}{Character vector of parameter labels whose p‐values
 you wish to extract (i.e., `"med"`).}
+
+\item{minimal_run}{Logical; if `TRUE`, only the first `max_run` permutations are generated and executed,
+for a quick preview.}
+
+\item{max_run}{Integer; maximum number of models to generate and run when `minimal_run = TRUE`.}
 
 \item{...}{Additional arguments (currently unused).}
 }
