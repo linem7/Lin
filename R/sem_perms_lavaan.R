@@ -83,8 +83,8 @@ sem_perms_lavaan <- function(
     exclusion      = NULL,
     fix            = NULL,
     structural_tpl,
-    minimal_run    = FALSE,
-    max_run        = 10,
+    minimal_run    = TRUE,
+    max_run        = 50,
     parameters     = NULL,
     missing        = "fiml",
     estimator      = "ML",
@@ -100,9 +100,18 @@ sem_perms_lavaan <- function(
   perm_mat <- gtools::permutations(n = length(pool), r = length(roles), v = pool)
   perm_df  <- as.data.frame(perm_mat, stringsAsFactors = FALSE)
   names(perm_df) <- roles
-  if (!is.null(exclusion)) for (v in exclusion) perm_df <- perm_df[rowSums(perm_df %in% v)<=1, ]
+  if (!is.null(exclusion)) {
+    for (vals in exclusion) {
+      perm_df <- perm_df %>%
+        dplyr::filter(rowSums(dplyr::across(all_of(roles), ~ . %in% vals)) <= 1)
+      # Namespaced dplyr verbs to avoid conflicts
+    }
+  }
   if (!is.null(fix)) for (pos in names(fix)) perm_df <- perm_df[perm_df[[pos]] %in% fix[[pos]], ]
-  if (minimal_run) perm_df <- head(perm_df, max_run)
+  if (isTRUE(minimal_run)) {
+    n_keep <- min(nrow(perm_df), max_run)
+    perm_df <- perm_df[seq_len(n_keep), , drop = FALSE]
+  }
 
   results_list <- vector("list", nrow(perm_df))
   cli::cli_progress_bar("Fitting lavaan models", total=nrow(perm_df))
@@ -127,6 +136,7 @@ sem_perms_lavaan <- function(
     ef <- FALSE # Error Flag
     wf <- FALSE # Warning Flag
 
+
     # Fit and flag errors/warnings
     fit <- tryCatch({
       # Use withCallingHandlers to catch warnings without stopping execution.
@@ -134,7 +144,7 @@ sem_perms_lavaan <- function(
       # the handler is called (setting wf to TRUE), and then execution resumes.
       # The return value of the main expression is preserved.
       withCallingHandlers(
-        lavaan::sem(mstr, data = data, missing = missing, estimator = estimator),
+        lavaan::sem(mstr, data = data, missing = missing, estimator = estimator, fixed.x = FALSE, control = list(iter.max = 200)),
         warning = function(w) {
           wf <<- TRUE
           # We can "muffle" the warning so it doesn't print to the console
@@ -153,28 +163,35 @@ sem_perms_lavaan <- function(
     # Extract fit measures
     fm <- tryCatch(
       lavaan::fitMeasures(fit, fit_indices),
-      error = function(e) setNames(rep(NA_real_, length(fit_indices)), fit_indices) # Handle missing values
+      error = function(e) setNames(rep(NA_real_, length(fit_indices)), fit_indices)
     )
 
-    # Calculate the ratio χ²/df
-    ratio_chi2_df <- if (!is.na(fm["chisq"]) && !is.na(fm["df"]) && fm["df"] > 0) {
-      fm["chisq"] / fm["df"]
-    } else {
-      NA
+    # Calculate the ratio χ²/df safely
+    # Initialize with a safe NA value first
+    ratio_chi2_df <- NA_real_
+
+    # Store df and chisq values in temporary variables for a clean check
+    df_val <- fm["df"]
+    chisq_val <- fm["chisq"]
+
+    # Only calculate the ratio if df is a valid, positive number
+    if (!is.na(df_val) && is.numeric(df_val) && df_val > 0) {
+      ratio_chi2_df <- chisq_val / df_val
     }
 
     # Format the fit indices
     fm_formatted <- formatC(fm, digits = 3, format = "f")
-    fm_formatted["df"] <- as.character(as.integer(round(fm["df"], 0))) # Make df an integer
+    fm_formatted["df"] <- as.character(as.integer(round(fm["df"], 0)))
 
-    # Calculate and add χ²/df to the formatted results
-    fm_formatted["χ²/df"] <- formatC(ratio_chi2_df, digits = 3, format = "f")
+    # The formatC call below is now protected because ratio_chi2_df will
+    # either be a valid number or NA, both of which are supported.
+    fm_formatted["chi2/df"] <- formatC(ratio_chi2_df, digits = 3, format = "f")
 
-    # Create the fit container and rename appropriately
+    # Create the fit container (using the safe ASCII names from our previous discussion)
     df_row <- data.frame(
       Model     = paste(idxs, collapse = "_"),
-      `χ²(df)`  = sprintf("%s (%s)", fm_formatted["chisq"], fm_formatted["df"]),
-      `χ²/df`   = fm_formatted["χ²/df"],
+      `chi2(df)`  = sprintf("%s (%s)", fm_formatted["chisq"], fm_formatted["df"]),
+      `chi2/df`   = fm_formatted["chi2/df"],
       CFI       = fm_formatted["cfi"],
       TLI       = fm_formatted["tli"],
       RMSEA     = fm_formatted["rmsea"],
@@ -185,20 +202,38 @@ sem_perms_lavaan <- function(
       check.names = FALSE
     )
 
-    # Add p-values if applicable
-    if (!ef && !is.null(parameters)) {
-      pv <- setNames(rep(NA_character_, length(parameters)), parameters)
-      # Check if fit object exists before trying to extract parameters
-      if (!is.null(fit)) {
-        pe <- tryCatch(lavaan::parameterEstimates(fit, ci = FALSE), error = function(e) NULL)
-        if (!is.null(pe)) {
-          for (par in parameters) {
-            ii <- which(pe$label == par | paste(pe$lhs, pe$op, pe$rhs, sep = "") == par)
-            if (length(ii)) pv[par] <- formatC(pe$pvalue[ii[1]], digits = 3, format = "f")
-          }
+
+    # Step 1: Initialize all parameter columns in df_row with NA.
+    # This GUARANTEES the columns will exist in the final output.
+    if (!is.null(parameters)) {
+      for (par in parameters) {
+        df_row[[par]] <- NA_character_
+      }
+    }
+
+    # Step 2: Now, try to fill in the p-values if possible.
+    if (!ef && !is.null(parameters) && !is.null(fit)) {
+      pe <- tryCatch(lavaan::parameterEstimates(fit, ci = FALSE), error = function(e) NULL)
+
+      if (!is.null(pe)) {
+        # Find the row numbers in `pe` that correspond to our parameters
+        match_indices <- match(parameters, pe$label)
+
+        # Filter out any parameters that were not found (match returns NA)
+        found_indices <- !is.na(match_indices)
+
+        # If we found any of the parameters...
+        if (any(found_indices)) {
+          pe_rows <- match_indices[found_indices]
+          p_values_to_format <- pe$pvalue[pe_rows]
+
+          # Get the names of the parameters we found
+          found_parameters <- parameters[found_indices]
+
+          # Fill in the p-values in the correct columns of df_row
+          df_row[1, found_parameters] <- formatC(p_values_to_format, digits = 3, format = "f")
         }
       }
-      for (par in parameters) df_row[[par]] <- pv[par]
     }
 
     # Add error and warning flags
