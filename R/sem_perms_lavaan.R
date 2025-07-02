@@ -88,7 +88,8 @@ sem_perms_lavaan <- function(
     parameters     = NULL,
     missing        = "fiml",
     estimator      = "ML",
-    digits         = 3
+    digits         = 3,
+    error_message  = TRUE
 ) {
   requireNamespace("gtools")
   requireNamespace("lavaan")
@@ -131,10 +132,10 @@ sem_perms_lavaan <- function(
     struct <- glue::glue_data(row_i, structural_tpl, cov = cov_s, extra = ext_s)
     mstr   <- paste(meas, struct, sep = "\n\n")
 
-    # --- MODIFICATION START ---
     # Initialize error and warning flags for the current iteration
     ef <- FALSE # Error Flag
     wf <- FALSE # Warning Flag
+    error_msg_text <- NA_character_ # To store the error message
 
 
     # Fit and flag errors/warnings
@@ -156,9 +157,13 @@ sem_perms_lavaan <- function(
     # The outer tryCatch still handles terminal errors as before.
     error = function(e) {
       ef <<- TRUE
+      # Clean the error message to be more readable
+      msg <- e$message
+      msg <- gsub("lavaan->.*\\(\\):\\s*\\n\\s*", "", msg) # Remove lavaan's function context
+      msg <- gsub("\\s*\\n\\s*", " ", msg)                 # Replace newlines with a space
+      error_msg_text <<- trimws(msg)                      # Store the cleaned message
       NULL # Return NULL for the fit object on error
     })
-    # --- MODIFICATION END ---
 
     # Extract fit measures
     fm <- tryCatch(
@@ -239,6 +244,11 @@ sem_perms_lavaan <- function(
     # Add error and warning flags
     df_row$Error   <- factor(ifelse(ef, "Yes", "No"), levels = c("Yes", "No"))
     df_row$Warning <- factor(ifelse(wf, "Yes", "No"), levels = c("Yes", "No"))
+
+    # Conditionally add the error message column
+    if (isTRUE(error_message)) {
+      df_row$`Error Message` <- error_msg_text
+    }
 
     results_list[[i]] <- df_row
   }

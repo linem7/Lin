@@ -18,7 +18,8 @@ sem_perms_lavaan(
   parameters = NULL,
   missing = "fiml",
   estimator = "ML",
-  digits = 3
+  digits = 3,
+  error_message = TRUE
 )
 }
 \arguments{
