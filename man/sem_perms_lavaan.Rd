@@ -76,9 +76,10 @@ fit indices and specified parameter p-values for each permutation.
 \examples{
 # Example 1: common list format (no helper function)
 latent_defs <- list(
-  x  = "x =~ x1 + x2 + x3",
+  x  = "x =~ x1 + x2 + x3", # the name of vector should be identical to the latent name
   m1 = "m1 =~ m11 + m12 + m13",
   m2 = "m2 =~ m21 + m22 + m23 + m24 + m25",
+  m3 = "m3", # Observed variable
   y  = "y =~ y1 + y2 + y3 + y4"
 )
 result_list <- sem_perms_lavaan(
