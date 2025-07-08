@@ -254,11 +254,20 @@ sem_perms_lavaan <- function(
       df_row$`Error Message` <- error_msg_text
     }
 
+    # add one column per role
+    for (r in roles) {
+      df_row[[r]] <- row_i[[r]]
+    }
+
     results_list[[i]] <- df_row
   }
 
   cli::cli_progress_done()
   final_df <- dplyr::bind_rows(results_list)
+  final_df <- dplyr::select(final_df,
+                            Model,
+                            dplyr::all_of(roles),
+                            dplyr::everything())
   row.names(final_df) <- NULL
   final_df
 }
