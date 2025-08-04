@@ -52,3 +52,33 @@ Extracts conditional means and/or response probabilities from one or more
 MplusAutomation model objects and produces a ggplot2 profile plot across
 latent profiles.
 }
+\examples{
+# 1. Load the pre‐read model objects you saved in data/lpa_res.RData
+data(lpa_res)
+
+# 1. Multi‐model plot (auto‐generated "3 Classes", "4 Classes", etc.)
+plot_mixture_profile(models = lpa_res)
+
+# 2. Reorder parameters on the x‐axis to X9–X1
+plot_mixture_profile(
+  models      = lpa_res,
+  param_order = paste0("X", 9:1)
+)
+
+# 3. Rename X1–X9 to more descriptive labels
+rename_map <- setNames(
+  paste("Indicator", 1:9),
+  paste0("X", 1:9)
+)
+plot_mixture_profile(
+  models       = lpa_res,
+  param_rename = rename_map
+)
+
+# 4. Single‐model plot: legend will show "Class 1 (xx.xx\%)", etc.
+plot_mixture_profile(models = lpa_res$lpa_3c.out)
+
+# 5. Return data rather than a plot object
+plot_mixture_profile(models = lpa_res$lpa_3c.out, return_data = T)
+
+}
