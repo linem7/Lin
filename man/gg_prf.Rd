@@ -5,28 +5,27 @@
 \title{Plot Person Response Functions (PRFs) for the most (in)consistent respondents}
 \usage{
 gg_prf(
-  X,
-  method = c("nonpar", "par"),
-  pfs = NULL,
+  data,
+  method = c("parametric", "nonparametric"),
+  model_type = c("2PL", "3PL", "Rasch"),
   direction = c("worse", "good"),
   n_cases = 10,
-  h = 0.09,
-  N.FPts = 101,
-  IP = NULL,
-  Ability = NULL,
-  facet_ncol = 5
+  facet_ncol = 5,
+  ...
 )
 }
 \arguments{
-\item{X}{Respondent × item data (0/1/`NA`) as matrix or data.frame.}
-
 \item{method}{`"nonpar"` (default) or `"par"`. Sets the default `pfs`.}
-
-\item{pfs}{`"Ht"` or `"lz"`. If `NULL`, uses `"Ht"` for `nonpar`, `"lz"` for `par`.}
 
 \item{direction}{`"worse"` (lowest PFS first) or `"good"` (highest first).}
 
 \item{n_cases}{Number of persons to display (default 10).}
+
+\item{facet_ncol}{Columns in `facet_wrap()` (default 5).}
+
+\item{X}{Respondent × item data (0/1/`NA`) as matrix or data.frame.}
+
+\item{pfs}{`"Ht"` or `"lz"`. If `NULL`, uses `"Ht"` for `nonpar`, `"lz"` for `par`.}
 
 \item{h}{Bandwidth for PRF smoothing (passed to `PerFit::PRFplot()`; default .09).}
 
@@ -35,8 +34,6 @@ gg_prf(
 \item{IP}{Optional item parameter matrix for `lz` (e.g., columns `a`, `b`, `g`).}
 
 \item{Ability}{Optional ability vector for `lz` (length `nrow(X)`).}
-
-\item{facet_ncol}{Columns in `facet_wrap()` (default 5).}
 }
 \value{
 A list with:

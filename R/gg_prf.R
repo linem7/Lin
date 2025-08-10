@@ -314,6 +314,13 @@ gg_prf <- function(
                           length(unique(df$id)), direction)
   subtitle_txt <- sprintf("(%s method: %s statistic)", method_label, pfs_label)
 
+  # Conditional x-axis label based on method
+  x_label <- if (method == "parametric") {
+    "Item difficulty (IRT-based, 0-1)"
+  } else {
+    "Empirical difficulty rank (0-1)"
+  }
+
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = prf, group = id)) +
     ggplot2::geom_line(linewidth = 0.7, na.rm = TRUE) +
     ggplot2::facet_wrap(~ id, ncol = facet_ncol) +
@@ -322,7 +329,7 @@ gg_prf <- function(
     ggplot2::labs(
       title = title_txt,
       subtitle = subtitle_txt,
-      x = "Empirical difficulty rank (0–1)",
+      x = x_label,
       y = "Smoothed P(correct)"
     ) +
     ggplot2::theme_classic(base_size = 12)

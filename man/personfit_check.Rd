@@ -59,7 +59,7 @@ diagnostic histograms. For parametric analysis, it fits an IRT model internally
 using mirt with IRTpars=TRUE. The returned plot object can be saved or replayed.
 }
 \examples{
-# These exmaples take times to generated, please wait
+# These exmaples take times to generate, please wait
 
 # Load example data
 data(InadequacyData, package = "PerFit")
