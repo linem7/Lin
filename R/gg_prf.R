@@ -100,58 +100,114 @@
 #' @importFrom grDevices pdf dev.off
 #' @export
 gg_prf <- function(
-    X,                           # already a data.frame
-    method = c("nonpar", "par"),
-    pfs = NULL,                  # defaults: nonpar->Ht, par->lz (can override)
+    data,
+    method = c("parametric", "nonparametric"),
+    model_type = c("2PL", "3PL", "Rasch"),
     direction = c("worse", "good"),
     n_cases = 10,
-    h = 0.09,
-    N.FPts = 101,
-    IP = NULL,                   # for lz if applicable
-    Ability = NULL,              # idem
-    facet_ncol = 5               # renamed to avoid ncol() collision
+    facet_ncol = 5,
+    ...                          # additional arguments passed to PRFplot
 ){
-  method    <- match.arg(method)
+
+  # --- Helper functions for argument matching --------------------------------
+  .match_method <- function(x){
+    x_lower <- tolower(trimws(x[1]))
+    # Direct alias mapping
+    if (x_lower %in% c("parametric", "para", "par", "p", "param")) return("parametric")
+    if (x_lower %in% c("nonparametric", "nonpar", "non", "np", "nonparam")) return("nonparametric")
+
+    stop(sprintf("Invalid method '%s'. Must be 'parametric' or 'nonparametric'.", x[1]), call. = FALSE)
+  }
+
+  .match_model <- function(x){
+    x_lower <- tolower(trimws(x[1]))
+    # Direct alias mapping
+    if (x_lower %in% c("rasch", "1pl")) return("Rasch")
+    if (x_lower == "2pl") return("2PL")
+    if (x_lower == "3pl") return("3PL")
+    if (x %in% c("Rasch", "2PL", "3PL")) return(x)  # Exact matches
+
+    stop(sprintf("Invalid model '%s'. Must be 'Rasch', '2PL', or '3PL'.", x[1]), call. = FALSE)
+  }
+
+  # --- Argument validation ----------------------------------------------------
+  method <- .match_method(method)
+  model_type <- .match_model(model_type)
   direction <- match.arg(direction)
 
-  # -- Dependency checks (fail fast with clear hints) -------------------------
-  if (!requireNamespace("PerFit", quietly = TRUE)) stop("Need PerFit.")
-  if (!requireNamespace("fda", quietly = TRUE))    stop("Need fda.")
-  if (!requireNamespace("ggplot2", quietly = TRUE))stop("Need ggplot2.")
-  if (!requireNamespace("tibble", quietly = TRUE)) stop("Need tibble.")
+  # --- Dependency checks ------------------------------------------------------
+  if (!requireNamespace("PerFit", quietly = TRUE)) stop("Need PerFit package.")
+  if (!requireNamespace("fda", quietly = TRUE))    stop("Need fda package.")
+  if (!requireNamespace("ggplot2", quietly = TRUE))stop("Need ggplot2 package.")
+  if (!requireNamespace("tibble", quietly = TRUE)) stop("Need tibble package.")
 
-  # -- Validate: X must be numeric/integer/logical and only {0,1,NA} ----------
+  # --- Validate data: must be numeric/integer/logical and only {0,1,NA} ------
   check_binary_df <- function(df) {
     bad_type <- !vapply(df, function(x) is.numeric(x) || is.integer(x) || is.logical(x), logical(1))
     if (any(bad_type)) {
       offending <- names(df)[bad_type]
-      stop("X has non-numeric columns (e.g., factor/character): ", paste(offending, collapse = ", "))
+      stop("data has non-numeric columns (e.g., factor/character): ", paste(offending, collapse = ", "))
     }
     bad_val <- vapply(df, function(x) any(!is.na(x) & !(x %in% c(0,1))), logical(1))
     if (any(bad_val)) {
       offending <- names(df)[bad_val]
-      stop("X has values not in {0,1,NA} in columns: ", paste(offending, collapse = ", "))
+      stop("data has values not in {0,1,NA} in columns: ", paste(offending, collapse = ", "))
     }
     invisible(TRUE)
   }
-  check_binary_df(X)
+  check_binary_df(data)
 
-  # -- Robust extractor: get a plain numeric PFS vector from PerFit objects ---
+  N <- nrow(data); J <- ncol(data)
+  if (N == 0 || J == 0) stop("data has zero rows or columns after preprocessing.")
+
+  # --- Determine PFS statistic based on method -------------------------------
+  pfs <- if (method == "parametric") "lz" else "Ht"
+
+  # --- Auto-estimate parameters if needed for parametric method --------------
+  IP <- NULL
+  Ability <- NULL
+
+  if (method == "parametric") {
+    if (!requireNamespace("mirt", quietly = TRUE)) {
+      stop("Need mirt package for parametric method. Install it to proceed.")
+    }
+
+    # Fit IRT model with SE estimation
+    mod <- suppressMessages(
+      mirt::mirt(data, model = 1, itemtype = model_type, verbose = FALSE)
+    )
+
+    if (inherits(mod, "try-error")) {
+      stop("Failed to estimate IRT model. Check your data or try nonparametric method.")
+    }
+
+    # Extract item parameters using IRTpars=TRUE for direct IRT parameterization
+    item_params <- mirt::coef(mod, simplify = TRUE, IRTpars = TRUE)$items
+
+    # Format IP matrix for PerFit: always needs 3 columns [a, b, c]
+    # Take first 3 columns - mirt returns a, b, g for all models (g=0 for Rasch/2PL)
+    IP <- as.matrix(item_params[, 1:3])
+    colnames(IP) <- c('a', 'b', 'c')
+
+    # Extract person abilities using EAP with full scores
+    person_scores <- mirt::fscores(mod,
+                                   method = "EAP",
+                                   full.scores = TRUE,
+                                   full.scores.SE = TRUE)
+    Ability <- as.vector(person_scores[, 1])
+  }
+
+  # --- Robust PFS extractor ---------------------------------------------------
   .extract_pfs <- function(pf_obj) {
     s <- pf_obj$PFscores
     if (is.null(s)) stop("PFscores missing in PerFit object.")
 
-    # data.frame -> numeric
     if (is.data.frame(s)) {
       s <- if ("PFscores" %in% names(s)) s[["PFscores"]] else s[[1]]
     }
-
-    # matrix -> first column
     if (is.matrix(s)) {
       s <- s[, 1, drop = TRUE]
     }
-
-    # list -> unlist
     if (is.list(s)) {
       s <- unlist(s, use.names = FALSE, recursive = TRUE)
     }
@@ -160,45 +216,36 @@ gg_prf <- function(
     s
   }
 
-  N <- nrow(X); J <- ncol(X)
-  if (N == 0 || J == 0) stop("X has zero rows or columns after preprocessing.")
-
-  # -- Define fallback filter: rows to drop if full-run PFS fails -------------
-  ones  <- rowSums(X == 1, na.rm = TRUE)
-  zeros <- rowSums(X == 0, na.rm = TRUE)
+  # --- Define fallback filter -------------------------------------------------
+  ones  <- rowSums(data == 1, na.rm = TRUE)
+  zeros <- rowSums(data == 0, na.rm = TRUE)
   obs   <- ones + zeros
 
-  effective_perfect <- (obs > 0) & ((ones == obs) | (zeros == obs))  # all-1 or all-0 among observed items
-  too_few           <- obs < 2                                       # fewer than 2 observed items
-  drop_mask         <- effective_perfect | too_few                   # rows to drop if full-run fails
+  effective_perfect <- (obs > 0) & ((ones == obs) | (zeros == obs))
+  too_few           <- obs < 2
+  drop_mask         <- effective_perfect | too_few
 
-  # -- Pick default PFS by method (user can override via `pfs`) ---------------
-  if (is.null(pfs)) pfs <- if (method == "par") "lz" else "Ht"
-  pfs <- match.arg(pfs, c("Ht","lz"))
-
-  # -- Single entry to PerFit's scoring (handles Ht vs lz) --------------------
+  # --- Compute PFS scores -----------------------------------------------------
   compute_pfs <- function(M_df, pfs, IP = NULL, Ability = NULL) {
     if (pfs == "Ht") {
       PerFit::Ht(M_df)
-    } else { # lz
-      if (is.null(IP) && is.null(Ability))
-        stop("Parametric 'lz' requires IP and/or Ability.")
+    } else {
       PerFit::lz(M_df, IP = IP, Ability = Ability)
     }
   }
 
-  # 1) Try computing PFS on the full data ------------------------------------
-  kept_index <- seq_len(N)          # use all rows here
-  pf_obj <- try(compute_pfs(X, pfs = pfs, IP = IP, Ability = Ability), silent = TRUE)
+  # Try computing PFS on full data
+  kept_index <- seq_len(N)
+  pf_obj <- try(compute_pfs(data, pfs = pfs, IP = IP, Ability = Ability), silent = TRUE)
   scores <- if (!inherits(pf_obj, "try-error")) .extract_pfs(pf_obj) else NULL
 
-  # 2) If failed or NAs, drop rows flagged by `drop_mask` and retry -----------
+  # If failed, retry with filtered data
   if (inherits(pf_obj, "try-error") || is.null(scores) || anyNA(scores)) {
     kept_index <- which(!drop_mask)
     if (length(kept_index) == 0L) stop("No eligible rows after filtering.")
-    X_wo <- X[kept_index, , drop = FALSE]
+    data_wo <- data[kept_index, , drop = FALSE]
     Ability_wo <- if (!is.null(Ability)) Ability[kept_index] else NULL
-    pf_obj <- compute_pfs(X_wo, pfs = pfs, IP = IP, Ability = Ability_wo)
+    pf_obj <- compute_pfs(data_wo, pfs = pfs, IP = IP, Ability = Ability_wo)
     scores <- .extract_pfs(pf_obj)
   }
 
@@ -206,12 +253,12 @@ gg_prf <- function(
     stop("PFscores malformed or contain NA after extraction.")
   }
 
-  # -- Rank within `kept_index`, then convert to original row IDs -------------
+  # --- Select cases based on direction ---------------------------------------
   ord_local <- if (direction == "worse") order(scores) else order(-scores)
   sel_local <- head(ord_local, n_cases)
   respID    <- kept_index[sel_local]
 
-  # -- Build PRFs for selected IDs; silence base-R plots via a temp device ----
+  # --- Build PRFs using PRFplot ----------------------------------------------
   prf <- local({
     tmp <- tempfile(fileext = ".pdf")
     grDevices::pdf(file = tmp)
@@ -221,35 +268,38 @@ gg_prf <- function(
     }, add = TRUE)
     suppressWarnings(suppressMessages(
       PerFit::PRFplot(
-        matrix   = X,            # pass full data; PRFplot subsets internally by respID
+        matrix   = data,
         respID   = respID,
-        h        = h,
-        N.FPts   = N.FPts,
         VarBands = FALSE,
-        message  = FALSE
+        message  = FALSE,
+        ...                    # pass additional arguments
       )
     ))
   })
 
-  # -- Evaluate PRF spline on a uniform grid in [0,1] -------------------------
+  # --- Extract and process PRF data ------------------------------------------
+  # Default N.FPts is 101 in PRFplot if not specified in ...
+  dots <- list(...)
+  N.FPts <- if ("N.FPts" %in% names(dots)) dots$N.FPts else 101
+
   grid  <- seq(0, 1, length.out = N.FPts)
-  y_hat <- fda::eval.fd(grid, prf$PRF.FDO)  # rows: grid; cols: respondents
+  y_hat <- fda::eval.fd(grid, prf$PRF.FDO)
   if (is.null(dim(y_hat))) y_hat <- matrix(y_hat, ncol = 1)
 
-  # Align columns to selected IDs if needed (fallback: sequential order)
+  # Align columns to selected IDs
   if (ncol(y_hat) != length(respID)) {
-    if (ncol(y_hat) == nrow(X)) {
+    if (ncol(y_hat) == nrow(data)) {
       y_hat <- y_hat[, respID, drop = FALSE]
     } else {
       y_hat <- y_hat[, seq_along(respID), drop = FALSE]
     }
   }
 
-  # -- Clamp to [0,1] and drop non-finite to prevent ggplot warnings ----------
+  # Clamp to [0,1]
   prf_vec <- as.vector(y_hat)
   prf_vec <- pmin(pmax(prf_vec, 0), 1)
 
-  # -- Long tibble for ggplot2 ------------------------------------------------
+  # --- Create long-format data for plotting ----------------------------------
   df <- tibble::tibble(
     x   = rep(grid, times = ncol(y_hat)),
     id  = rep(respID, each = length(grid)),
@@ -257,13 +307,13 @@ gg_prf <- function(
   )
   df <- df[is.finite(df$prf) & is.finite(df$x), , drop = FALSE]
 
-  # -- Title/subtitle formatting as requested ---------------------------------
-  method_tag <- if (method == "par") "Parametric" else "Nonparametric"
-  pfs_tag    <- if (pfs == "lz") "lz" else "Ht"
-  title_txt  <- sprintf("Person Response Functions for top %d %s cases", length(unique(df$id)), direction)
-  subtitle_txt <- sprintf("(%s: %s method)", method_tag, pfs_tag)
+  # --- Generate plot ----------------------------------------------------------
+  method_label <- if (method == "parametric") "Parametric" else "Nonparametric"
+  pfs_label    <- if (pfs == "lz") "lz" else "Ht"
+  title_txt    <- sprintf("Person Response Functions for top %d %s cases",
+                          length(unique(df$id)), direction)
+  subtitle_txt <- sprintf("(%s method: %s statistic)", method_label, pfs_label)
 
-  # -- Final plot --------------------------------------------------------------
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = prf, group = id)) +
     ggplot2::geom_line(linewidth = 0.7, na.rm = TRUE) +
     ggplot2::facet_wrap(~ id, ncol = facet_ncol) +
@@ -277,11 +327,11 @@ gg_prf <- function(
     ) +
     ggplot2::theme_classic(base_size = 12)
 
-  # -- Return plot + data + IDs + raw rows (with original indices) ------------
+  # --- Return results ---------------------------------------------------------
   list(
     plot = p,
     data = df,
-    id   = respID,                        # original row ids (correct to export)
-    raw = cbind(orig_id = respID, X[respID, , drop = FALSE])      # raw rows for further investigation
+    id   = respID,
+    raw  = cbind(orig_id = respID, data[respID, , drop = FALSE])
   )
 }
