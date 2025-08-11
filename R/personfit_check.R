@@ -95,13 +95,13 @@
 #'
 #' @export
 personfit_check <- function(
-    data,                          # N x J matrix/data.frame of 0/1 (can include NA)
-    method = "both",               # "parametric", "nonparametric", or "both"
-    model  = "2PL",                # "Rasch", "2PL", or "3PL"
-    cutpoint = 0.05,               # 0.05 (default) or 0.10
-    score_method = "EAP",          # "EAP", "MAP", or "ML"
-    seed = 42,                     # seed for cutoff() resampling
-    plot = TRUE                    # produce plots
+    data,                   # N x J matrix/data.frame of 0/1 (can include NA)
+    method = "both",        # "parametric", "nonparametric", or "both"
+    model  = "2PL",         # "Rasch", "2PL", or "3PL"
+    cutpoint = 0.05,        # 0.05 (default) or 0.10
+    score_method = "EAP",   # "EAP", "MAP", or "ML"
+    seed = 42,              # seed for cutoff() resampling
+    plot = TRUE             # produce plots
 ){
   if (!requireNamespace("PerFit", quietly = TRUE)) {
     stop("Package 'PerFit' is required.")
@@ -142,58 +142,6 @@ personfit_check <- function(
     switch(model, Rasch = "1PL", `2PL` = "2PL", `3PL` = "3PL")
   }
 
-  .extract_ip_from_mirt <- function(fit, model){
-    if (!requireNamespace("mirt", quietly = TRUE)) {
-      stop("Package 'mirt' is required for parametric analysis.")
-    }
-
-    co <- mirt::coef(fit, IRTpars = TRUE, simplify = TRUE)
-
-    # Extract items data frame
-    if (is.list(co) && !is.null(co$items)) {
-      items <- as.data.frame(co$items, stringsAsFactors = FALSE)
-    } else if (is.matrix(co)) {
-      items <- as.data.frame(co, stringsAsFactors = FALSE)
-    } else {
-      pick <- names(co)[vapply(co, function(z) is.numeric(z) || is.matrix(z), logical(1))]
-      items <- as.data.frame(do.call(rbind, co[pick]))
-    }
-
-    # Extract discrimination parameters (a)
-    a_col <- grep("^a(\\d+)?$", colnames(items))
-    if (length(a_col) == 0 && "a" %in% colnames(items)) a_col <- which(colnames(items) == "a")
-    if (length(a_col) == 0) stop("Could not find discrimination parameter 'a' in mirt coefficients.")
-    a <- as.numeric(items[, a_col[1]])
-
-    # Extract difficulty parameters (b)
-    if ("b" %in% colnames(items)) {
-      b <- as.numeric(items[, "b"])
-    } else if ("d" %in% colnames(items)) {
-      b <- -as.numeric(items[, "d"]) / a
-    } else {
-      stop("Could not find difficulty parameter 'b' or 'd' in mirt coefficients.")
-    }
-
-    # Extract guessing parameters (c/g)
-    cpar <- if ("g" %in% colnames(items)) {
-      as.numeric(items[, "g"])
-    } else if ("c" %in% colnames(items)) {
-      as.numeric(items[, "c"])
-    } else {
-      rep(0, length(a))
-    }
-
-    # Force parameters to match selected model
-    if (model == "Rasch") {
-      a <- rep(1, length(a))
-      cpar <- rep(0, length(a))
-    } else if (model == "2PL") {
-      cpar <- rep(0, length(a))
-    }
-
-    cbind(a = a, b = b, c = cpar)
-  }
-
   # --- Process arguments ------------------------------------------------------
   method <- .match_method(method)
   model <- .match_model(model)
@@ -204,9 +152,7 @@ personfit_check <- function(
   }
   cutpoint <- ifelse(abs(cutpoint - 0.1) < .Machine$double.eps^0.5, 0.10, cutpoint)
 
-  # Prepare data
-  data <- as.matrix(data)
-  storage.mode(data) <- "numeric"
+  # data validation
   if (any(!is.na(data) & !(data %in% c(0, 1)))) {
     warning("data contains values other than 0, 1, or NA. Ensure dichotomous scoring.")
   }
@@ -221,14 +167,23 @@ personfit_check <- function(
       stop("Package 'mirt' is required for parametric person-fit analysis.")
     }
 
-    # Fit IRT model internally
+    N <- nrow(data); J <- ncol(data)
+    idx_perfect <- rowSums(data, na.rm = TRUE) == J
+    n_perfect <- sum(idx_perfect, na.rm = TRUE)
+    if (n_perfect > 0) {
+      message(sprintf("Parametric step: removing %d perfect scorers before lz* computation.", n_perfect))
+    }
+
+    data_np <- data[!idx_perfect, , drop = FALSE]
+
+    # Fit IRT model on non-perfect cases only
     itemtype <- switch(model, Rasch = "Rasch", `2PL` = "2PL", `3PL` = "3PL")
-    fit <- mirt::mirt(data, 1, itemtype = itemtype, verbose = FALSE)
-    ip <- .extract_ip_from_mirt(fit, model)
+    fit <- mirt::mirt(data_np, 1, itemtype = itemtype, verbose = FALSE)
+    ip <- coef(fit, simplify = TRUE, IRTpars = TRUE)$item[, c("a","b","g")]
     ability <- as.numeric(mirt::fscores(fit, method = score_method, full.scores.SE = FALSE))
 
     # Compute lz* statistic
-    lzstar_stat <- PerFit::lzstar(matrix = data, IP = ip, IRT.PModel = pmodel, Ability = ability)
+    lzstar_stat <- PerFit::lzstar(matrix = data_np, IP = ip, IRT.PModel = pmodel, Ability = ability)
     set.seed(seed)
     lzstar_cut <- PerFit::cutoff(lzstar_stat, Blvl = cutpoint)
   }
