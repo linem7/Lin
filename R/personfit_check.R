@@ -153,8 +153,12 @@ personfit_check <- function(
   cutpoint <- ifelse(abs(cutpoint - 0.1) < .Machine$double.eps^0.5, 0.10, cutpoint)
 
   # data validation
-  if (any(!is.na(data) & !(data %in% c(0, 1)))) {
-    warning("data contains values other than 0, 1, or NA. Ensure dichotomous scoring.")
+  invalid_values <- validate_data(data, c(0,1))
+  if (!is.null(invalid_values)) {
+    stop(paste0("Data contains ", nrow(invalid_values), " invalid value(s). Only 0, 1, and NA are allowed.\n",
+                "Invalid locations:\n",
+                paste(capture.output(print(invalid_values)), collapse = "\n")),
+         call. = FALSE)
   }
 
   # --- Compute person-fit statistics for plotting ----------------------------
