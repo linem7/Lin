@@ -2,11 +2,19 @@
 # 1. Detect which family of fit‐indices to use, based on estimator
 get_estimator_family <- function(lavaan_model) {
   est <- toupper(lavInspect(lavaan_model, "options")$estimator)
-  if (est %in% c("WLSM","WLSMV","DWLS","ULS","ULSM","ULSMV","MLM","MLMV")) {
+
+  # Estimators that typically produce SCALED fit indices (e.g., for categorical data)
+  scaled_estimators <- c("WLSM", "WLSMV", "DWLS", "ULS", "ULSM", "ULSMV", "MLM", "MLMV", "MLMVS")
+
+  # Estimators that typically produce ROBUST standard errors/chi-square (e.g., MLR)
+  robust_estimators <- c("MLR")
+
+  if (est %in% scaled_estimators) {
     "scaled"
-  } else if (est == "MLR") {
+  } else if (est %in% robust_estimators) {
     "robust"
   } else {
+    # Default for ML, FIML, etc.
     "standard"
   }
 }
