@@ -1,5 +1,6 @@
 # Helper functions (internal)
 # 1. Detect which family of fit‐indices to use, based on estimator
+#' @noRd
 get_estimator_family <- function(lavaan_model) {
   est <- toupper(lavInspect(lavaan_model, "options")$estimator)
 
@@ -20,6 +21,7 @@ get_estimator_family <- function(lavaan_model) {
 }
 
 # 2. Pick the best available version of each index (scaled → robust → standard)
+#' @noRd
 get_best_measure <- function(all_meas, name, family) {
   if (family=="scaled") {
     candidates <- c(paste0(name,".scaled"),
@@ -43,6 +45,7 @@ get_best_measure <- function(all_meas, name, family) {
 }
 
 # 3. Map raw measure names → publication‐style column names
+#' @noRd
 format_column_name <- function(x) {
   name_map <- c(
     chisq = "χ²",

@@ -1,47 +1,68 @@
 # Helper function to determine estimator family
-get_estimator_family <- function(fit) {
-  est <- tryCatch(lavaan::lavInspect(fit, "options")$estimator,
-                  error = function(e) NA_character_)
-  robust_ests <- c("MLM", "MLMVS", "MLMV", "MLR", "WLSMV", "ULSMV", "WLSM", "DWLS")
-  if (is.na(est)) return("unknown")
-  if (est %in% robust_ests) "robust" else "ml"
+get_estimator_family <- function(lavaan_model) {
+  est <- toupper(lavInspect(lavaan_model, "options")$estimator)
+
+  # Estimators that typically produce SCALED fit indices (e.g., for categorical data)
+  scaled_estimators <- c("WLSM", "WLSMV", "DWLS", "ULS", "ULSM", "ULSMV", "MLM", "MLMV", "MLMVS")
+
+  # Estimators that typically produce ROBUST standard errors/chi-square (e.g., MLR)
+  robust_estimators <- c("MLR")
+
+  if (est %in% scaled_estimators) {
+    "scaled"
+  } else if (est %in% robust_estimators) {
+    "robust"
+  } else {
+    # Default for ML, FIML, etc.
+    "standard"
+  }
 }
 
-# Helper function to select best available fit measure
-get_best_measure <- function(meas, name, family) {
-  candidates <- switch(name,
-                       "chisq" = if (family == "robust") c("chisq.robust", "chisq.scaled", "chisq")
-                       else c("chisq.scaled", "chisq"),
-                       "df" = if (family == "robust") c("df.robust", "df.scaled", "df")
-                       else c("df.scaled", "df"),
-                       "cfi" = if (family == "robust") c("cfi.robust", "cfi.scaled", "cfi")
-                       else c("cfi.scaled", "cfi"),
-                       "tli" = if (family == "robust") c("tli.robust", "tli.scaled", "tli")
-                       else c("tli.scaled", "tli"),
-                       "rmsea" = if (family == "robust") c("rmsea.robust", "rmsea.scaled", "rmsea")
-                       else c("rmsea.scaled", "rmsea"),
-                       "srmr" = c("srmr"),
-                       name
-  )
-
-  hit <- candidates[candidates %in% names(meas)]
-  used <- if (length(hit)) hit[1] else name
-  val <- if (used %in% names(meas)) as.numeric(meas[[used]]) else NA_real_
-  list(value = val, used = used)
+# 2. Pick the best available version of each index (scaled → robust → standard)
+#' @noRd
+get_best_measure <- function(all_meas, name, family) {
+  if (family=="scaled") {
+    candidates <- c(paste0(name,".scaled"),
+                    paste0(name,".robust"),
+                    name)
+  } else if (family=="robust") {
+    candidates <- c(paste0(name,".robust"),
+                    paste0(name,".scaled"),
+                    name)
+  } else {
+    candidates <- c(name,
+                    paste0(name,".scaled"),
+                    paste0(name,".robust"))
+  }
+  for (cand in candidates) {
+    if (cand %in% names(all_meas) && !is.na(all_meas[cand])) {
+      return(list(value=as.numeric(all_meas[cand]), used=cand))
+    }
+  }
+  return(list(value=NA_real_, used=NA_character_))
 }
 
-# Helper function to format column names for publication
+# 3. Map raw measure names → publication‐style column names
+#' @noRd
 format_column_name <- function(x) {
-  x <- tolower(x)
-  switch(x,
-         "chisq" = "χ²",
-         "df" = "df",
-         "cfi" = "CFI",
-         "tli" = "TLI",
-         "rmsea" = "RMSEA",
-         "srmr" = "SRMR",
-         toupper(x)
+  name_map <- c(
+    chisq = "χ²",
+    df    = "df",
+    cfi   = "CFI",
+    tli   = "TLI",
+    rmsea = "RMSEA",
+    srmr  = "SRMR",
+    aic   = "AIC",
+    bic   = "BIC",
+    nnfi  = "NNFI",
+    gfi   = "GFI",
+    agfi  = "AGFI"
   )
+  if (x %in% names(name_map)) {
+    name_map[[x]]
+  } else {
+    toupper(x)
+  }
 }
 
 #' Generate Comparative Tables of lavaan Model Fit Indices
