@@ -17,8 +17,9 @@ compute(.data, ...)
             (e.g., \code{score1 = "item{i}", 1:5})
       \item \strong{Explicit Vector:} \code{var_name = c("var1", "var2", ...)}
             (e.g., \code{score2 = c("item1", "item3", "item5")})
-      \item \strong{Variable Range:} \code{var_name = "start_var:end_var"}
-            (e.g., \code{score3 = "item1:item5"})
+      \item \strong{Variable Range (Position-Based):} \code{var_name = "start_var:end_var"}
+            Selects all columns from start_var to end_var based on their positions
+            in the data frame, regardless of naming patterns. Supports reverse order.
     }
   \item **Aggregation function** as unnamed argument (e.g., \code{mean}, \code{sum}, \code{median})
   \item **Optional \code{na.rm}** logical argument for handling missing values
@@ -44,9 +45,11 @@ expands to \code{c("item1", "item2", "item3", "item4", "item5")}.
 \strong{Explicit Vector Method:} Directly specify column names as a character vector.
 Useful for non-sequential or custom variable selections.
 
-\strong{Variable Range Method:} Use colon notation \code{"start:end"} for sequential
-variables with the same prefix and numeric suffixes. Automatically handles
-zero-padded formats (e.g., \code{"q01:q05"}).
+\strong{Variable Range Method (Position-Based):} Use colon notation \code{"start:end"}
+to select all columns between the positions of the start and end variables (inclusive).
+The start and end variables do not need to share prefixes or follow any naming pattern.
+Selection is based purely on column positions in the data frame. If start appears
+after end, selection proceeds in reverse order.
 
 **Performance Optimization:** For \code{mean} and \code{sum} functions with multiple
 columns, the function uses optimized \code{rowMeans()} and \code{rowSums()}
@@ -59,96 +62,49 @@ specification, the result variable is filled with \code{NA}.
 \examples{
 library(dplyr)
 
-# Create sample data
+# Create sample data with mixed naming patterns
 set.seed(123)
 data <- data.frame(
   id = 1:100,
-  item1 = rnorm(100, 3, 1), item2 = rnorm(100, 3, 1), item3 = rnorm(100, 3, 1),
-  item4 = rnorm(100, 3, 1), item5 = rnorm(100, 3, 1), item6 = rnorm(100, 4, 1),
-  item7 = rnorm(100, 4, 1), item8 = rnorm(100, 4, 1), item9 = rnorm(100, 4, 1),
-  item10 = rnorm(100, 4, 1), item11 = rnorm(100, 5, 1), item12 = rnorm(100, 5, 1),
-  item13 = rnorm(100, 5, 1), item14 = rnorm(100, 5, 1), item15 = rnorm(100, 5, 1)
+  item1 = rnorm(100, 3, 1),
+  item2 = rnorm(100, 3, 1),
+  height = rnorm(100, 170, 10),
+  weight = rnorm(100, 70, 15),
+  score_a = rnorm(100, 85, 10),
+  score_b = rnorm(100, 88, 12),
+  final_grade = rnorm(100, 90, 8),
+  temperature = rnorm(100, 25, 5)
 )
 
-# Add missing values for testing
-data[1:5, c("item1", "item6", "item11")] <- NA
-
-# Method 1: Pattern + Index specification
-data_means <- data \%>\%
-  compute(
-    scale1_mean = "item{i}", 1:5,
-    scale2_mean = "item{i}", 6:10,
-    scale3_mean = "item{i}", 11:15,
-    mean, na.rm = TRUE
-  )
-
-# Method 2: Explicit variable vector
-data_custom <- data \%>\%
-  compute(
-    custom_score = c("item1", "item3", "item5", "item7"),
-    mean, na.rm = TRUE
-  )
-
-# Method 3: Variable range specification
+# Position-based range selection (NEW FUNCTIONALITY)
+# Works regardless of naming patterns
 data_ranges <- data \%>\%
   compute(
-    early_items = "item1:item5",
-    late_items = "item11:item15",
+    physical_measures = "height:score_b",    # Columns 4-6: height, weight, score_a, score_b
+    mixed_range = "item1:weight",           # Columns 2-4: item1, item2, height, weight
+    end_range = "score_a:temperature",      # Columns 5-8: score_a, score_b, final_grade, temperature
     mean, na.rm = TRUE
   )
 
-# Mixed methods in single call
-data_mixed <- data \%>\%
+# Traditional pattern method still works
+data_pattern <- data \%>\%
   compute(
-    pattern_mean = "item{i}", 1:3,              # Pattern method
-    explicit_mean = c("item4", "item6", "item8"), # Explicit method
-    range_sum = "item10:item12",                 # Range method
+    item_mean = "item{i}", 1:2,
     mean, na.rm = TRUE
   )
 
-# Using different aggregation functions
-data_sums <- data \%>\%
+# Explicit vector method
+data_explicit <- data \%>\%
   compute(
-    total1 = "item1:item5",
-    total2 = c("item6", "item8", "item10"),
-    sum, na.rm = FALSE
-  )
-
-# Other statistical functions
-data_stats <- data \%>\%
-  compute(
-    median_score = "item1:item5",
-    median, na.rm = TRUE
-  ) \%>\%
-  compute(
-    sd_score = c("item6", "item7", "item8"),
-    sd, na.rm = TRUE
-  )
-
-# Zero-padded variable names
-padded_data <- data.frame(
-  id = 1:50,
-  q01 = rnorm(50), q02 = rnorm(50), q03 = rnorm(50),
-  q04 = rnorm(50), q05 = rnorm(50)
-)
-
-padded_result <- padded_data \%>\%
-  compute(
-    questionnaire_mean = "q01:q05",
+    custom_score = c("height", "final_grade", "temperature"),
     mean, na.rm = TRUE
   )
 
-# Non-sequential selections with pattern method
-data_nonseq <- data \%>\%
+# Reverse order range selection
+data_reverse <- data \%>\%
   compute(
-    odd_items = "item{i}", c(1, 3, 5, 7, 9),
-    even_items = "item{i}", c(2, 4, 6, 8, 10),
+    reverse_range = "temperature:score_a",  # Selects in reverse: temperature, final_grade, score_b, score_a
     mean, na.rm = TRUE
   )
 
-}
-\seealso{
-\code{\link[base]{mean}}, \code{\link[base]{sum}},
-  \code{\link[base]{rowMeans}}, \code{\link[base]{rowSums}},
-  \code{\link[dplyr]{mutate}}
 }

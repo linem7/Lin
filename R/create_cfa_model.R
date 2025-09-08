@@ -18,7 +18,7 @@
 #' lavaan::cfa(model1, data = data)
 #' reliability_table(model1, data = mydata, digits = 3)
 #'
-#' # 2) Multi-factor model, then reliability:
+#' # 2) Multi-factor model by paste (not paste0), then reliability:
 #' model2 <- paste(
 #'   create_cfa_model("x", "x{i}", 1:5),
 #'   create_cfa_model("m", "m{i}", 1:3),
