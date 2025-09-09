@@ -165,7 +165,8 @@ fit_table_lavaan <- function(...,
                              indices         = c("chisq","df","cfi","tli","rmsea","srmr"),
                              changes         = c("cfi","rmsea"),
                              digits          = 3,
-                             show_estimator_info = FALSE) {
+                             show_estimator_info = FALSE,
+                             show_summary    = FALSE) {
   # capture models
   models <- list(...)
   if (length(models)==1 &&
@@ -227,22 +228,24 @@ fit_table_lavaan <- function(...,
   # build data.frame
   fit_df <- bind_rows(results)
   fit_df$Model     <- model_names
-  fit_df$Estimator <- est_info
+  if (show_estimator_info) {
+    fit_df$Estimator <- est_info
+  }
 
   #  ─── order columns: Model, Estimator, chisq, df, chisq_df, <others> ─────
   final_raw <- indices
   if (all(c("chisq","df") %in% indices)) {
     df_pos <- which(indices=="df")
-    # insert chisq_df AFTER df
-    final_raw <- append(
-      indices,
-      values = "chisq_df",
-      after = df_pos
-    )
+    final_raw <- append(indices, values = "chisq_df", after = df_pos)
   } else {
     final_raw <- unique(c(indices, "chisq_df"))
   }
-  fit_df <- fit_df[, c("Model","Estimator", final_raw)]
+
+  cols <- c("Model", final_raw)
+  if (show_estimator_info) {
+    cols <- append("Model", c("Estimator", final_raw))
+  }
+  fit_df <- fit_df[, cols]
 
   # rename to publication‐style
   new_names <- sapply(names(fit_df), function(x) {
@@ -295,16 +298,18 @@ fit_table_lavaan <- function(...,
   attr(fit_df, "original_changes")   <- changes
 
   #  ─── print concise summary ──────────────────────────────────────────────
-  if (nrow(fit_df)>1) {
+  if (show_summary && nrow(fit_df) > 1) {  # <— gated by show_summary
     cat("=== MODEL COMPARISON SUMMARY ===\n")
     cat(sprintf("(Changes relative to %s)\n\n", model_names[1]))
-    if (show_estimator_info) {
+
+    if (show_estimator_info) {  # <— still works inside the summary
       cats <- paste0(
         "- ", model_names, ": ", est_info,
         " (", attr(fit_df,"estimator_families"), ")\n"
       )
       cat("Estimator info:\n", paste(cats, collapse=""), "\n")
     }
+
     for (i in 2:nrow(fit_df)) {
       cat(model_names[i], ":\n")
       for (m in changes) {
@@ -312,13 +317,11 @@ fit_table_lavaan <- function(...,
         dc  <- paste0("Δ", fm)
         if (dc %in% names(fit_df) && !is.na(fit_df[[dc]][i])) {
           val <- fit_df[[dc]][i]
-          dir <- if (m=="cfi") {
-            if (val>0) "improved" else "declined"
-          } else if (m=="rmsea") {
-            if (val<0) "improved" else "increased"
-          } else {
-            ""
-          }
+          dir <- if (m == "cfi") {
+            if (val > 0) "improved" else "declined"
+          } else if (m == "rmsea") {
+            if (val < 0) "improved" else "increased"
+          } else ""
           cat(sprintf(paste0("  %s: %+.", digits, "f %s\n"), dc, val, dir))
         }
       }

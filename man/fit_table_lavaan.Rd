@@ -10,7 +10,8 @@ fit_table_lavaan(
   indices = c("chisq", "df", "cfi", "tli", "rmsea", "srmr"),
   changes = c("cfi", "rmsea"),
   digits = 3,
-  show_estimator_info = FALSE
+  show_estimator_info = FALSE,
+  show_summary = FALSE
 )
 }
 \arguments{
