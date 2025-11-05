@@ -4,12 +4,25 @@
 \alias{calculate_reliability_alpha}
 \title{Internal: compute reliability for (potential) second-order factor models}
 \usage{
-calculate_reliability_alpha(data, var_list, ...)
+calculate_reliability_alpha(
+  data,
+  var_list,
+  criteria_alpha_dim = 0.7,
+  criteria_alpha_overall2 = 0.8,
+  criteria_alpha_single = 0.7,
+  ...
+)
 }
 \arguments{
 \item{data}{data.frame of observed variables.}
 
 \item{var_list}{named list of lavaan measurement model syntax (one per construct).}
+
+\item{criteria_alpha_dim}{numeric, threshold for first-order dimensions (default 0.70).}
+
+\item{criteria_alpha_overall2}{numeric, threshold for pooled second-order alpha (default 0.80).}
+
+\item{criteria_alpha_single}{numeric, threshold for single-factor constructs (default 0.70).}
 
 \item{...}{ignored (placeholder to be flexible with upstream callers).}
 }

@@ -12,11 +12,18 @@
 #'
 #' @param data data.frame of observed variables.
 #' @param var_list named list of lavaan measurement model syntax (one per construct).
+#' @param criteria_alpha_dim numeric, threshold for first-order dimensions (default 0.70).
+#' @param criteria_alpha_overall2 numeric, threshold for pooled second-order alpha (default 0.80).
+#' @param criteria_alpha_single numeric, threshold for single-factor constructs (default 0.70).
 #' @param ... ignored (placeholder to be flexible with upstream callers).
 #' @return A named list per construct with fields: `type`, `pass`,
 #'   `alpha_overall`, `n_dimensions` (for second-order), and `dimensions`.
 #' @keywords internal
-calculate_reliability_alpha <- function(data, var_list, ...) {
+calculate_reliability_alpha <- function(data, var_list,
+                                        criteria_alpha_dim = 0.7,
+                                        criteria_alpha_overall2 = 0.8,
+                                        criteria_alpha_single = 0.7,
+                                        ...) {
   results <- list()
 
   for (construct_name in names(var_list)) {
@@ -137,8 +144,8 @@ calculate_reliability_alpha <- function(data, var_list, ...) {
       valid_dim_alphas <- sapply(dim_results, function(x) {
         if (!is.null(x) && !is.na(x$alpha)) x$alpha else -1
       })
-      all_dim_pass <- all(valid_dim_alphas >= 0.7)
-      overall_pass <- !is.na(alpha_total) && alpha_total >= 0.8
+      all_dim_pass <- all(valid_dim_alphas >= criteria_alpha_dim)
+      overall_pass <- !is.na(alpha_total) && alpha_total >= criteria_alpha_overall2
 
       results[[construct_name]] <- list(
         type = "Second-order factor",
@@ -169,7 +176,7 @@ calculate_reliability_alpha <- function(data, var_list, ...) {
 
           results[[construct_name]] <- list(
             type = "Single-dimension construct",
-            pass = omega >= 0.7,
+            pass = omega >= criteria_alpha_single,
             alpha_overall = omega,
             n_items = length(loadings),
             dimensions = NULL
@@ -306,17 +313,36 @@ check_all_criteria <- function(data, model_configs, var_list = NULL, criteria) {
     cat("\n[Reliability check]\n")
 
     rel_results <- tryCatch({
-      calculate_reliability_alpha(data, var_list)
+      # Use thresholds provided in criteria; default second-order threshold to 0.8 if not supplied
+      criteria_alpha_dim <- criteria$reliability$min_alpha
+      criteria_alpha_single <- criteria$reliability$min_alpha
+      criteria_alpha_overall2 <- if (!is.null(criteria$reliability$min_alpha_overall2)) criteria$reliability$min_alpha_overall2 else 0.8
+
+      calculate_reliability_alpha(
+        data, var_list,
+        criteria_alpha_dim = criteria_alpha_dim,
+        criteria_alpha_overall2 = criteria_alpha_overall2,
+        criteria_alpha_single = criteria_alpha_single
+      )
     }, error = function(e) {
       cat("✗ Reliability analysis failed:", e$message, "\n")
       return(NULL)
     }, warning = function(w) {
-      suppressWarnings(calculate_reliability_alpha(data, var_list))
+      suppressWarnings(calculate_reliability_alpha(
+        data, var_list,
+        criteria_alpha_dim = criteria$reliability$min_alpha,
+        criteria_alpha_overall2 = if (!is.null(criteria$reliability$min_alpha_overall2)) criteria$reliability$min_alpha_overall2 else 0.8,
+        criteria_alpha_single = criteria$reliability$min_alpha
+      ))
     })
 
     if (!is.null(rel_results) && length(rel_results) > 0) {
-      # Print formatted report (dimension threshold uses criteria$reliability$min_alpha; second-order uses 0.8)
-      print_reliability_report(rel_results, criteria$reliability$min_alpha, 0.8)
+      # Print report: use criteria$reliability$min_alpha for dimensions; prefer criteria$reliability$min_alpha_overall2 for second-order
+      print_reliability_report(
+        rel_results,
+        criteria_alpha = criteria$reliability$min_alpha,
+        criteria_alpha_overall2 = if (!is.null(criteria$reliability$min_alpha_overall2)) criteria$reliability$min_alpha_overall2 else 0.8
+      )
 
       all_pass <- all(sapply(rel_results, function(x) x$pass))
 
@@ -509,7 +535,7 @@ check_all_criteria <- function(data, model_configs, var_list = NULL, criteria) {
 identify_bad_cases <- function(data, model_configs, var_list, criteria, n_to_remove, focus = "auto") {
   cat("\n[Identify problematic cases]\n")
 
-  # Print focus (no longer using influence_stat)
+  # Print focus
   if (identical(focus, "reliability")) {
     cat("Focus: Reliability (Method 1: remove cases to increase α)\n")
   } else if (identical(focus, "paths")) {
@@ -584,7 +610,7 @@ identify_bad_cases <- function(data, model_configs, var_list, criteria, n_to_rem
           if (length(it) > 0) items <- c(items, it)
         }
       } else {
-        # direct latent->observed items
+        # Direct latent->observed items
         items <- rhs[(lhs %in% latent_lhs) & (rhs %in% all_observed)]
       }
 
@@ -622,7 +648,7 @@ identify_bad_cases <- function(data, model_configs, var_list, criteria, n_to_rem
 
     cat(sprintf("Method 1 target: %s (items=%d, current α=%.3f)\n", target_name, length(items), a0))
 
-    # Compute per-case deleted Δα
+    # Per-case deleted delta alpha
     n <- nrow(df)
     deltas <- rep(NA_real_, n)
     X <- as.data.frame(df[, items, drop = FALSE])
@@ -633,27 +659,166 @@ identify_bad_cases <- function(data, model_configs, var_list, criteria, n_to_rem
       deltas[i] <- if (!is.na(ai)) ai - a0 else NA_real_
     }
 
-    # 选择 Δα 最大的样本（优先正增益），不足则返回空让回退处理
+    # Pick cases with largest positive delta alpha; if none, return empty to trigger fallback
     ok <- which(is.finite(deltas) & deltas > 0)
     if (length(ok) == 0) return(integer(0))
     ord <- ok[order(deltas[ok], decreasing = TRUE)]
     head(ord, min(k, length(ord)))
   }
 
+  # Targeted strategies: case influence for paths and fit
+  # Depend on semfindr::influence_stat()/fit_measures_change_approx()/est_change_approx()
+  # If unavailable, automatically fall back to the generic Z-score strategy
+
+  # Targeted selection for non-significant key paths: remove cases that move paths toward significance
+  target_by_paths <- function(df, k) {
+    if (length(model_configs) == 0) return(integer(0))
+    # Fallback if influence_stat is not available
+    if (!exists("influence_stat")) return(integer(0))
+
+    # Aggregate all non-significant key paths across models
+    n <- nrow(df)
+    scores <- rep(0, n)
+    any_target <- FALSE
+
+    for (config_name in names(model_configs)) {
+      config <- model_configs[[config_name]]
+      # Fit model
+      fit <- tryCatch({
+        cfa(config$model, data = df, std.lv = TRUE)
+      }, error = function(e) NULL)
+      if (is.null(fit)) next
+      converged <- tryCatch(lavInspect(fit, "converged"), error = function(e) FALSE)
+      if (!converged) next
+
+      pe <- tryCatch(parameterEstimates(fit), error = function(e) NULL)
+      if (is.null(pe)) next
+
+      if (!is.null(config$key_paths)) {
+        # Find keyed paths; keep those not significant (p >= .05)
+        path_rows <- pe[pe$label %in% config$key_paths, , drop = FALSE]
+        if (nrow(path_rows) == 0) next
+        path_rows <- path_rows[is.na(path_rows$pvalue) | path_rows$pvalue >= 0.05, , drop = FALSE]
+        if (nrow(path_rows) == 0) next
+
+        params <- paste0(path_rows$lhs, " ", path_rows$op, " ", path_rows$rhs)
+        # Approximate case influence (no refit)
+        inf <- tryCatch({
+          influence_stat(fit, parameters = params, fit_measures = FALSE, mahalanobis = FALSE)
+        }, error = function(e) NULL)
+        if (is.null(inf)) next
+
+        # For each failing path, estimate improvement: approx sign-consistent increase toward larger |est|
+        for (i in seq_len(nrow(path_rows))) {
+          lhs_i <- path_rows$lhs[i]; op_i <- path_rows$op[i]; rhs_i <- path_rows$rhs[i]
+          pv_i  <- suppressWarnings(as.numeric(path_rows$pvalue[i]))
+          est_i <- suppressWarnings(as.numeric(path_rows$est[i]))
+          pname <- paste0(lhs_i, " ", op_i, " ", rhs_i)
+          if (!is.finite(est_i) || !(pname %in% colnames(inf))) next
+          delta <- suppressWarnings(as.numeric(inf[, pname]))
+          if (all(!is.finite(delta))) next
+          # Approximate gain: if est==0 use |delta|; else use sign(est)*delta to increase |est|
+          gain <- if (isTRUE(est_i == 0)) abs(delta) else sign(est_i) * delta
+          # Slightly upweight larger p-values (farther from 0.05)
+          w <- if (is.finite(pv_i)) max(0, pv_i - 0.05) else 0
+          scores <- scores + pmax(0, gain) * (1 + w)
+          any_target <- TRUE
+        }
+      }
+    }
+
+    if (!any_target) return(integer(0))
+    ord <- order(scores, decreasing = TRUE)
+    ord <- ord[is.finite(scores[ord]) & scores[ord] > 0]
+    head(ord, min(k, length(ord)))
+  }
+
+  # Targeted selection for poor fit (CFI/RMSEA): remove cases that increase CFI and/or reduce RMSEA
+  target_by_fit <- function(df, k) {
+    if (length(model_configs) == 0) return(integer(0))
+    # Fallback if influence_stat is not available
+    if (!exists("influence_stat")) return(integer(0))
+
+    n <- nrow(df)
+    scores <- rep(0, n)
+    any_target <- FALSE
+
+    for (config_name in names(model_configs)) {
+      config <- model_configs[[config_name]]
+      fit <- tryCatch({
+        cfa(config$model, data = df, std.lv = TRUE)
+      }, error = function(e) NULL)
+      if (is.null(fit)) next
+      converged <- tryCatch(lavInspect(fit, "converged"), error = function(e) FALSE)
+      if (!converged) next
+
+      fms <- tryCatch(fitMeasures(fit, c("cfi", "rmsea")), error = function(e) NULL)
+      if (is.null(fms)) next
+      cfi_fail <- is.finite(fms[["cfi"]]) && (fms[["cfi"]] < criteria$fit$min_cfi)
+      rmsea_fail <- is.finite(fms[["rmsea"]]) && (fms[["rmsea"]] > criteria$fit$max_rmsea)
+      if (!(cfi_fail || rmsea_fail)) next
+
+      inf <- tryCatch({
+        influence_stat(fit, fit_measures = c("cfi", "rmsea"), mahalanobis = FALSE, parameters = FALSE)
+      }, error = function(e) NULL)
+      if (is.null(inf)) next
+
+      # Interpretation: influence_stat fit_measures are (with_all) - (without_case)
+      # Improvement when removing a case:
+      #  - CFI should increase => improvement_cfi = -delta_cfi
+      #  - RMSEA should decrease => improvement_rmsea = +delta_rmsea
+      if (cfi_fail && ("cfi" %in% colnames(inf))) {
+        cfi_delta <- suppressWarnings(as.numeric(inf[, "cfi"]))
+        scores <- scores + pmax(0, -cfi_delta)
+        any_target <- TRUE
+      }
+      if (rmsea_fail && ("rmsea" %in% colnames(inf))) {
+        rmsea_delta <- suppressWarnings(as.numeric(inf[, "rmsea"]))
+        scores <- scores + pmax(0, rmsea_delta)
+        any_target <- TRUE
+      }
+    }
+
+    if (!any_target) return(integer(0))
+    ord <- order(scores, decreasing = TRUE)
+    ord <- ord[is.finite(scores[ord]) & scores[ord] > 0]
+    head(ord, min(k, length(ord)))
+  }
+
   picks <- integer(0)
 
-  # Decision: prefer Method 1 (reliability); otherwise fallback
+  # Priority: reliability -> Method 1; paths -> targeted path influence; fit -> targeted fit influence
   if (identical(focus, "reliability") || identical(focus, "auto")) {
     picks <- try_method1(data, n_to_remove)
     if (length(picks) > 0) {
       cat("  ✓ Method 1: selected ", length(picks), " case(s)\n", sep = "")
       return(picks)
     } else {
-      cat("  ↪ No positive-gain cases found by Method 1; switching to fallback\n")
+      cat("  ↪ No positive-gain cases found by Method 1; try targeted selection next\n")
     }
   }
 
-  # For paths/fit focus or when Method 1 fails, use fallback
+  if (identical(focus, "paths")) {
+    picks <- target_by_paths(data, n_to_remove)
+    if (length(picks) > 0) {
+      cat("  ✓ Targeted (paths): selected ", length(picks), " case(s)\n", sep = "")
+      return(picks)
+    } else {
+      cat("  ↪ Targeted (paths) found none; switching to fallback\n")
+    }
+  }
+
+  if (identical(focus, "fit")) {
+    picks <- target_by_fit(data, n_to_remove)
+    if (length(picks) > 0) {
+      cat("  ✓ Targeted (fit): selected ", length(picks), " case(s)\n", sep = "")
+      return(picks)
+    } else {
+      cat("  ↪ Targeted (fit) found none; switching to fallback\n")
+    }
+  }
+
+  # Fallback: generic Z-score sum strategy
   picks <- fallback_pick_by_zsum(data, n_to_remove)
   cat("  ✓ Fallback: selected ", length(picks), " case(s) by Z-score sum\n", sep = "")
   return(picks)
@@ -683,6 +848,18 @@ identify_bad_cases <- function(data, model_configs, var_list, criteria, n_to_rem
 #' @param max_iterations integer, maximum number of iterations (default 10).
 #' @param max_total_remove_pct numeric in (0,1], cap on cumulative removals relative to initial n (default 0.5).
 #' @param seed optional integer seed for reproducibility.
+#' @param criteria optional list to override thresholds and checks. Structure:
+#'   list(
+#'     reliability = list(
+#'       min_alpha = 0.7,               # First-order dimension threshold (also default for single-factor)
+#'       min_alpha_overall2 = 0.8,      # Second-order overall threshold
+#'       min_alpha_single = 0.8,        # Single-factor threshold (optional; defaults to min_alpha if missing)
+#'       check = TRUE
+#'     ),
+#'     paths = list(check = TRUE),
+#'     fit = list(min_cfi = 0.90, max_rmsea = 0.08, check = TRUE)
+#'   )
+#'   Fields not provided will use default values.
 #'
 #' @return A list with elements:
 #'   - `cleaned_data`: the cleaned data.frame
@@ -708,40 +885,76 @@ identify_bad_cases <- function(data, model_configs, var_list, criteria, n_to_rem
 #' @seealso calculate_reliability_alpha, check_all_criteria, identify_bad_cases
 #'
 #' @examples
-#'   # Minimal example: simulate data and run cleaning
+#'   # Example 1: Single-model cleaning with custom criteria
 #'   set.seed(123)
 #'   pop_model <- '
-#'     X =~ 0.80*f1 + 0.80*f2 + 0.80*f3
-#'     f1 =~ 0.8*X1 + 0.82*X2 + 0.79*X3
-#'     f2 =~ 0.81*X4 + 0.83*X5 + 0.78*X6
-#'     f3 =~ 0.8*X7 + 0.82*X8 + 0.79*X9
-#'     M =~ 0.8*M1 + 0.82*M2 + 0.81*M3 + 0.79*M4 + 0.83*M5
-#'     Y =~ 0.8*Y1 + 0.81*Y2 + 0.82*Y3 + 0.79*Y4 + 0.8*Y5
+#'     X =~ 0.8*X1 + 0.8*X2 + 0.8*X3
+#'     M =~ 0.8*M1 + 0.8*M2 + 0.8*M3
+#'     Y =~ 0.8*Y1 + 0.8*Y2 + 0.8*Y3
 #'     M ~ 0.5*X
 #'     Y ~ 0.6*M
-#'     X ~~ 1*X; f1 ~~ 1*f1; f2 ~~ 1*f2; f3 ~~ 1*f3; M ~~ 1*M; Y ~~ 1*Y
 #'   '
 #'   dat <- lavaan::simulateData(model = pop_model, sample.nobs = 500)
-#'   obs <- c(paste0("X", 1:9), paste0("M", 1:5), paste0("Y", 1:5))
+#'   obs <- c(paste0("X", 1:3), paste0("M", 1:3), paste0("Y", 1:3))
 #'   dat <- as.data.frame(dat)[, obs, drop = FALSE]
 #'
-#'   # Inject 50 outliers using rnorm with inflated SD
+#'   # Inject outliers to mimic contamination
 #'   set.seed(999)
-#'   n_out <- 50
+#'   n_out <- 30
 #'   outliers <- as.data.frame(
 #'     sapply(dat, function(x) rnorm(n_out, mean = mean(x), sd = sd(x) * 3))
 #'   )
 #'   dat <- rbind(dat, outliers)
 #'
+#'   # Measurement models per construct
 #'   var_list <- list(
-#'     "Construct X" = 'X =~ f1 + f2 + f3\nf1 =~el_cfgs <- list(
-#'     "Mediation model" = list(
-#'       model = 'X =~ f1 + f2 + f3\nf1 =~ X1 + X2 + X3\nf2 =~ X4 + X5 + X6\nf3 =~ X7 + X8 + X9\nM =~ M1 + M2 + M3 + M4 + M5\nY =~ Y1 + Y2 + Y3 + Y4 + Y5\nM ~ path_a*X\nY ~ path_b*M',
-#'       key_paths = c("path_a", "path_b")
+#'     X = 'X =~ X1 + X2 + X3',
+#'     M = 'M =~ M1 + M2 + M3',
+#'     Y = 'Y =~ Y1 + Y2 + Y3'
+#'   )
+#'
+#'   # Single structural model with labeled key paths
+#'   model_configs <- list(
+#'     Mediation = list(
+#'       model = 'X =~ X1 + X2 + X3\nM =~ M1 + M2 + M3\nY =~ Y1 + Y2 + Y3\nM ~ path_a*X\nY ~ path_b*M',
+#'       key_paths = c('path_a', 'path_b')
 #'     )
 #'   )
 #'
-#'   res <- interative_removint simulateData
+#'   # Custom criteria (e.g., higher reliability thresholds)
+#'   criteria <- list(
+#'     reliability = list(min_alpha = 0.8, min_alpha_overall2 = 0.8, min_alpha_single = 0.8, check = TRUE),
+#'     paths = list(check = TRUE),
+#'     fit = list(min_cfi = 0.90, max_rmsea = 0.08, check = TRUE)
+#'   )
+#'
+#'   res1 <- interative_removing(
+#'     data = dat,
+#'     model_configs = model_configs,
+#'     var_list = var_list,
+#'     criteria = criteria,
+#'     seed = 999
+#'   )
+#'
+#'   # Example 2: Multi-model cleaning (two models evaluated simultaneously)
+#'   model_configs2 <- list(
+#'     Mediation = list(
+#'       model = 'X =~ X1 + X2 + X3\nM =~ M1 + M2 + M3\nY =~ Y1 + Y2 + Y3\nM ~ path_a*X\nY ~ path_b*M',
+#'       key_paths = c('path_a', 'path_b')
+#'     ),
+#'     DirectPlusM = list(
+#'       model = 'X =~ X1 + X2 + X3\nM =~ M1 + M2 + M3\nY =~ Y1 + Y2 + Y3\nY ~ path_c*X + path_b2*M',
+#'       key_paths = c('path_c', 'path_b2')
+#'     )
+#'   )
+#'
+#'   res2 <- interative_removing(
+#'     data = dat,
+#'     model_configs = model_configs2,
+#'     var_list = var_list,
+#'     criteria = criteria,
+#'     seed = 999
+#'   )
 #' @importFrom stats cov
 #' @export
 interative_removing <- function(data,
@@ -751,14 +964,17 @@ interative_removing <- function(data,
                                 pct_increment = 0.05,
                                 max_iterations = 10,
                                 max_total_remove_pct = 0.5,
-                                seed = NULL) {
+                                seed = NULL,
+                                criteria = NULL) {
 
   if (!is.null(seed)) set.seed(seed)
 
-  # Default thresholds (consistent with Core_file.rmd)
-  criteria <- list(
+  # Read or construct default thresholds
+  default_criteria <- list(
     reliability = list(
-      min_alpha = 0.7,
+      min_alpha = 0.7,            # First-order dimensions (and default for single-factor)
+      min_alpha_overall2 = 0.8,   # Second-order overall alpha
+      min_alpha_single = 0.8,     # Single-factor alpha
       check = TRUE
     ),
     paths = list(
@@ -770,6 +986,12 @@ interative_removing <- function(data,
       check = TRUE
     )
   )
+  if (is.null(criteria)) {
+    criteria <- default_criteria
+  } else {
+    # Recursively merge user-specified overrides
+    criteria <- utils::modifyList(default_criteria, criteria)
+  }
 
   cat("========================================\n")
   cat("Start removal-only iterative cleaning (interative_removing)\n")
@@ -935,5 +1157,3 @@ interative_removing <- function(data,
     final_results = check_results
   )
 }
-
-#

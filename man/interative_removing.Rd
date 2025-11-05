@@ -12,7 +12,8 @@ interative_removing(
   pct_increment = 0.05,
   max_iterations = 10,
   max_total_remove_pct = 0.5,
-  seed = NULL
+  seed = NULL,
+  criteria = NULL
 )
 }
 \arguments{
@@ -32,6 +33,19 @@ and optional `key_paths` (character vector of labeled paths to test).}
 \item{max_total_remove_pct}{numeric in (0,1], cap on cumulative removals relative to initial n (default 0.5).}
 
 \item{seed}{optional integer seed for reproducibility.}
+
+\item{criteria}{optional list to override thresholds and checks. Structure:
+list(
+  reliability = list(
+    min_alpha = 0.7,               # First-order dimension threshold (also default for single-factor)
+    min_alpha_overall2 = 0.8,      # Second-order overall threshold
+    min_alpha_single = 0.8,        # Single-factor threshold (optional; defaults to min_alpha if missing)
+    check = TRUE
+  ),
+  paths = list(check = TRUE),
+  fit = list(min_cfi = 0.90, max_rmsea = 0.08, check = TRUE)
+)
+Fields not provided will use default values.}
 }
 \value{
 A list with elements:
@@ -74,6 +88,78 @@ original rows; it is removed before returning.
   consider pre-filtering candidates for performance if needed.
 }
 
+\examples{
+  # Example 1: Single-model cleaning with custom criteria
+  set.seed(123)
+  pop_model <- '
+    X =~ 0.8*X1 + 0.8*X2 + 0.8*X3
+    M =~ 0.8*M1 + 0.8*M2 + 0.8*M3
+    Y =~ 0.8*Y1 + 0.8*Y2 + 0.8*Y3
+    M ~ 0.5*X
+    Y ~ 0.6*M
+  '
+  dat <- lavaan::simulateData(model = pop_model, sample.nobs = 500)
+  obs <- c(paste0("X", 1:3), paste0("M", 1:3), paste0("Y", 1:3))
+  dat <- as.data.frame(dat)[, obs, drop = FALSE]
+
+  # Inject outliers to mimic contamination
+  set.seed(999)
+  n_out <- 30
+  outliers <- as.data.frame(
+    sapply(dat, function(x) rnorm(n_out, mean = mean(x), sd = sd(x) * 3))
+  )
+  dat <- rbind(dat, outliers)
+
+  # Measurement models per construct
+  var_list <- list(
+    X = 'X =~ X1 + X2 + X3',
+    M = 'M =~ M1 + M2 + M3',
+    Y = 'Y =~ Y1 + Y2 + Y3'
+  )
+
+  # Single structural model with labeled key paths
+  model_configs <- list(
+    Mediation = list(
+      model = 'X =~ X1 + X2 + X3\nM =~ M1 + M2 + M3\nY =~ Y1 + Y2 + Y3\nM ~ path_a*X\nY ~ path_b*M',
+      key_paths = c('path_a', 'path_b')
+    )
+  )
+
+  # Custom criteria (e.g., higher reliability thresholds)
+  criteria <- list(
+    reliability = list(min_alpha = 0.8, min_alpha_overall2 = 0.8, min_alpha_single = 0.8, check = TRUE),
+    paths = list(check = TRUE),
+    fit = list(min_cfi = 0.90, max_rmsea = 0.08, check = TRUE)
+  )
+
+  res1 <- interative_removing(
+    data = dat,
+    model_configs = model_configs,
+    var_list = var_list,
+    criteria = criteria,
+    seed = 999
+  )
+
+  # Example 2: Multi-model cleaning (two models evaluated simultaneously)
+  model_configs2 <- list(
+    Mediation = list(
+      model = 'X =~ X1 + X2 + X3\nM =~ M1 + M2 + M3\nY =~ Y1 + Y2 + Y3\nM ~ path_a*X\nY ~ path_b*M',
+      key_paths = c('path_a', 'path_b')
+    ),
+    DirectPlusM = list(
+      model = 'X =~ X1 + X2 + X3\nM =~ M1 + M2 + M3\nY =~ Y1 + Y2 + Y3\nY ~ path_c*X + path_b2*M',
+      key_paths = c('path_c', 'path_b2')
+    )
+  )
+
+  res2 <- interative_removing(
+    data = dat,
+    model_configs = model_configs2,
+    var_list = var_list,
+    criteria = criteria,
+    seed = 999
+  )
+}
 \seealso{
 calculate_reliability_alpha, check_all_criteria, identify_bad_cases
 }
