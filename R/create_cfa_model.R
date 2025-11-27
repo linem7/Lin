@@ -23,7 +23,7 @@
 #'   create_cfa_model("x", "x{i}", 1:5),
 #'   create_cfa_model("m", "m{i}", 1:3),
 #'   create_cfa_model("z", "z{i}", 1:4),
-#'   collapse = "\n"
+#'   sep = "\n"
 #' )
 #' # Now get reliability for the combined model:
 #' reliability_table(model2, data = mydata, digits = 3)

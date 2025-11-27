@@ -31,7 +31,7 @@
 #' spec_mf <- paste(
 #'   create_cfa_model("F1", "x{i}", 1:3),
 #'   create_cfa_model("F2", "y{i}", 1:4),
-#'   collapse = "\n"
+#'   sep = "\n"
 #' )
 #'
 #' rel_mf <- reliability_table(spec_mf, data = my_data, digits = 2)
