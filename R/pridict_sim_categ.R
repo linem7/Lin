@@ -229,10 +229,16 @@ validate_logistic_simulation <- function(df, outcome_col = "outcome") {
   }
 
   # --- 2. Validate Predictor Proportions ---
-  cat("\n================ Variable Proportion Validation ================\n")
+  cat("\n================ Variable Frequency Validation ================\n")
+  cat(sprintf("Total Observations (N): %d\n", nrow(df))) # Added Total N for reference
+
   for (p in predictors) {
     cat(sprintf("\nDistribution of variable [%s] (Type: %s):\n", p, class(df[[p]])))
+
+    # Generate the frequency table (Counts)
     tbl <- table(df[[p]])
-    print(prop.table(tbl))
+
+    # Print the table directly to show counts instead of proportions
+    print(tbl)
   }
 }
