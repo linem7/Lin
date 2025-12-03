@@ -17,6 +17,7 @@ sem_perms(
   output = "stand;",
   out_dir = ".",
   parameters = NULL,
+  indices = NULL,
   minimal_run = TRUE,
   max_run = 10,
   ...
@@ -26,128 +27,145 @@ sem_perms(
 \item{data}{A data.frame containing all manifest indicators and covariates.}
 
 \item{latent_defs}{A named character vector of measurement model strings.
+The function robustly extracts variable names from these strings
+by intersecting words with `names(data)`.
 E.g.
 ```r
 c(
   x = "x by x1 x2 x3;",
   m1 = "m1 by m11 m12 m13;",
-  …
+  ...
 )
 ```}
 
-\item{roles}{Character vector of latent roles to permute (default `c("x","m1","m2","y")`).}
+\item{roles}{Character vector of latent roles to permute (default `c("x","m","y")`).
+These names will appear as column headers in the output data.frame
+to indicate which variable was assigned to which role.}
 
 \item{covariate}{Character vector of covariate names included in every model
-(default `c("gender","age")`).}
+(default `NULL`).}
 
-\item{extra_var}{Optional character vector of additional manifest variables.}
+\item{extra_var}{Optional character vector of additional manifest variables to
+include in the `USEVARIABLES` list but not in the permutation logic.}
 
-\item{exclusion}{List of vectors: each vector lists roles that should not
-co‐occur in the same model.}
+\item{exclusion}{List of vectors: each vector lists variable names (from `names(latent_defs)`)
+that should not co-occur in the same model.}
 
-\item{fix}{Named list: each element is a vector of roles allowed
-for one slot (e.g. `list(x = c("x","w"))`).}
+\item{fix}{Named list: each element is a vector of variable names allowed
+for a specific role slot (e.g. `list(x = c("var1","var2"))`).}
 
-\item{analysis}{String passed to Mplus “ANALYSIS:” (default `"esti = ml;"`).}
+\item{analysis}{String passed to Mplus "ANALYSIS:" block (default `"esti = ml;"`).}
 
-\item{structural_tpl}{User‐supplied glue template for the “MODEL:” block.}
+\item{structural_tpl}{User-supplied glue template for the "MODEL:" block. Use `{role_name}`
+placeholders (e.g., `{x}`, `{m}`) which will be replaced by actual
+variable names.}
 
-\item{output}{String passed to Mplus “OUTPUT:” (default `"stand;"`).}
+\item{output}{String passed to Mplus "OUTPUT:" block (default `"stand;"`).}
 
 \item{out_dir}{Directory in which to write `.inp` and `.out` files
-(default `"./Mplus/med"`).}
+(default `"./"`).}
 
-\item{parameters}{Character vector of parameter labels whose p‐values
-you wish to extract (i.e., `"med"`).}
+\item{parameters}{Character vector of specific parameter labels (e.g., `"ind_eff"`)
+whose p-values you wish to extract into the results table.}
 
-\item{minimal_run}{Logical; if `TRUE`, only the first `max_run` permutations are generated and executed,
-for a quick preview.}
+\item{indices}{Character vector of additional fit indices to extract from Mplus
+summaries (e.g., `c("AIC", "BIC", "LL")`). Standard indices
+(ChiSq, df, CFI, TLI, RMSEA, SRMR) are extracted by default.}
 
-\item{max_run}{Integer; maximum number of models to generate and run when `minimal_run = TRUE`.}
+\item{minimal_run}{Logical; if `TRUE`, only the first `max_run` permutations are
+generated and executed, for a quick preview.}
+
+\item{max_run}{Integer; maximum number of models to generate and run when
+`minimal_run = TRUE`.}
 
 \item{...}{Additional arguments (currently unused).}
 }
 \value{
-A data.frame combining Mplus fit indices (via `fit_table()`) and
-        p‐values for the specified parameters, with one row per model.
+A data.frame with the following columns:
+\itemize{
+  \item \code{Models}: Unique model identifier (based on variable combination).
+  \item \code{<roles>}: Columns named after `roles` showing the variable assigned to each role.
+  \item \code{Fit Indices}: Standard indices (\eqn{\chi^2}, df, CFI, TLI, RMSEA, SRMR) plus any specified in `indices`.
+  \item \code{Parameters}: P-values for parameters specified in `parameters`.
+  \item \code{Warning/Error}: "Yes"/"No" indicators for Mplus execution status.
+}
 }
 \description{
-Automatically generates Mplus “.inp” files for every permutation
+Automatically generates Mplus ".inp" files for every permutation
              of specified latent roles, runs them, and returns a combined
-             data.frame of fit indices plus user‐requested parameter p‐values.
-             Supports exclusion/fix rules, custom structural templates,
-             covariates, and robust error‐handling with progress bars.
+             data.frame. The output includes model structure (role assignments),
+             standard fit indices (Chi-sq, df, CFI, TLI, RMSEA, SRMR), user-requested
+             additional indices (e.g., AIC, BIC), and specific parameter p-values.
+             Supports exclusion/fix rules, custom structural templates, covariates,
+             automatic long-line wrapping for Mplus, and robust error-handling.
 }
 \details{
 -----------------------------------------------------------------------------
 
 
-- Creates one `.inp` per permutation of `roles`.
-- Honors `exclusion` and `fix` constraints.
-- Writes data via `prepareMplusData()`, runs models with `runModels()` and
-  a CLI progress bar (errors are caught and logged).
-- Reads results with `readModels()`, builds fit‐index table, then appends
-  requested p‐values.
+\itemize{
+  \item \strong{Workflow}: The function generates all valid combinations of variables based on
+        \code{roles}, filters them using \code{exclusion} and \code{fix} constraints, and
+        processes them in three steps: Generate Input -> Run Mplus -> Extract Results.
+
+  \item \strong{Template Syntax}: The \code{structural_tpl} uses glue syntax. Placeholders
+        matching \code{roles} (e.g., \code{{x}}, \code{{m}}) are dynamically replaced by
+        the specific variable names in each iteration.
+
+  \item \strong{Input Safety}: It robustly extracts variable names for \code{USEVARIABLES}
+        by intersecting syntax words with your data columns (ignoring Mplus keywords like
+        "BY" or "ON"). It also \strong{automatically wraps long lines} (< 85 chars) to
+        prevent Mplus truncation errors.
+
+  \item \strong{Result Integrity}: Results are matched to models using the internal filename
+        ID found within the Mplus output. This ensures strict data alignment and prevents
+        \code{NA} rows caused by file sorting differences.
+}
 }
 \examples{
 \dontrun{
-# Example 1: chain mediation
+# Example 1: Simple Mediation
 data("latent_data")
 
-# Define measurement model for each varaible,
-# must formatted without hyphen, "x1 x2 x3" rather than "x1-x3"
+# 1. Define Measurement Models
 latent_defs <- c(
-  x  = "x by x1 x2 x3;",
-  m1 = "m1 by m11 m12 m13;",
-  m2 = "m2 by m21 m22 m23 m24 m25;",
-  y  = "y by y1 y2 y3 y4;",
-  z  = "z by z1 z2 z3;",
-  w  = "w by w1 w2 w3 w4;"
+  x  = "x_lat BY x1 x2 x3;",
+  m  = "m_lat BY m1 m2 m3;",
+  y  = "y_lat BY y1 y2 y3;",
+  w  = "w_lat BY w1 w2 w3;"
 )
 
-#-- set up sample constraints for the examples ------------------------------
+# 2. Define Constraints
+# m and w cannot be in the same model
+exclusive_groups <- list(c("m", "w"))
+# y slot can only be y_lat
+fixed_groups     <- list(y = c("y"))
 
-structural_tpl_chain <- "
-  {m1} ON {x}
-  {cov};
-  {m2} ON {x}
-  {m1}
-  {cov};
-  {y} ON {x}
-  {m1}
-  {m2}
-  {cov};
-
-  model constraint:
-  new(med1-med3);
-  med1 = a1 * b1;
-  med2 = a2 * b2;
-  med3 = a1 * d * b2;"
-
-out1 <- sem_perms(
-  data          = latent_data,
-  latent_defs   = latent_defs,
-  structural_tpl= structural_tpl_chain,
-  covariate     = c("age", "gender"),
-  out_dir       = "./Mplus",
-  parameters = c("med1", "med2", "med3")
-)
-
-# Example 2: moderation
-structural_tpl_mod <- "
-  int | {x} xwith {w};
-  {y} ON {x} {w} int {cov};
+# 3. Define Structural Template
+structural_tpl_med <- "
+  {m} ON {x} (a);
+  {y} ON {m} (b);
+  {y} ON {x} (c);
+  MODEL CONSTRAINT:
+  NEW(ind);
+  ind = a*b;
 "
 
-out2 <- sem_perms(
-  data            = latent_data,
-  latent_defs     = latent_defs,
-  roles           = c("x", "w", "y"),
-  structural_tpl  = structural_tpl_mod,
-  covariate       = c("age", "gender"),
-  parameters      = c("int"),
-  analysis = "type = random;",
-  out_dir         = "./Mplus/moderation"
+# 4. Run Permutations
+results <- sem_perms(
+  data           = latent_data,
+  latent_defs    = latent_defs,
+  roles          = c("x", "m", "y"),
+  structural_tpl = structural_tpl_med,
+  exclusion      = exclusive_groups,
+  fix            = fixed_groups,
+  covariate      = c("age", "gender"),
+  out_dir        = "./Mplus_Perms",
+  parameters     = c("ind"),         # Extract mediation p-value
+  indices        = c("AIC", "BIC")   # Extract extra fit indices
 )
+
+# View results
+head(results)
 }
 }
