@@ -9,49 +9,67 @@ fit_table(
   indices = character(0),
   ref = c("last", "first"),
   diffTest = TRUE,
-  digits = 2,
+  digits = 3,
   model_names = NULL
 )
 }
 \arguments{
-\item{...}{One or more model objects (or lists of models) that contain a \code{summaries} element.}
+\item{...}{One or more model objects (or lists of models) that contain a \code{summaries} element.
+Typically objects returned by \code{MplusAutomation::readModels}.}
 
 \item{indices}{Character vector of additional indices to report. These will be added after the default
-fit indices. If "AIC" or "BIC" are included, the corresponding difference metrics (ΔAIC, ΔBIC) are
-also reported.}
+fit indices.}
 
-\item{ref}{Character string indicating the reference model to compare to. Options are "last" (default)
-or "first".}
+\item{ref}{Character string indicating the reference model to compare to. Options are \code{"last"}
+(compare current row to the immediately preceding row) or \code{"first"} (compare all rows to the first row).
+Defaults to \code{"last"}.}
 
 \item{diffTest}{Logical. If \code{TRUE} (default), difference metrics will be computed.}
 
-\item{digits}{Integer. Number of digits to round numeric outputs.}
+\item{digits}{Integer. Number of digits to round numeric outputs. Defaults to \code{3}.
+P-values < .001 are formatted as "< .001", and indices bounded by 1 (e.g., CFI, RMSEA)
+have leading zeros removed per APA style (e.g., .950).}
 
-\item{model_names}{Optional character vector of custom model names. If supplied, its length must equal the number of models passed via `...`; these names will override the default names (extracted from each model’s `Filename` field). Defaults to `NULL`.}
+\item{model_names}{Optional character vector of custom model names. If supplied, its length must
+equal the *total number of resulting rows* in the table.
+\emph{Note:} If a single input file is parsed into multiple rows (e.g., Configural/Metric/Scalar),
+you must provide a name for every row generated, otherwise the default names (Filename + Step) will be used.}
 }
 \value{
-A data frame containing the fit indices and difference metrics.
+A data frame containing the formatted fit indices and difference metrics.
 }
 \description{
-This function creates a table of fit indices for one or more models and computes
-difference metrics (e.g., ΔCFI, ΔRMSEA, Δχ²) between comparative models. If the
-primary chi-square values or degrees of freedom are unavailable, the function will
-automatically switch to a log-likelihood (LL) based approach. When available, the
-LLCorrectionFactor is used; otherwise, the LL difference is computed using LL alone.
+The function is designed to be robust and flexible:
+\itemize{
+  \item \strong{Recursive Input Handling:} It accepts single objects, lists of objects, or nested
+    \code{mplus.model.list} objects returned by \code{MplusAutomation::readModels}, flattening them automatically.
+  \item \strong{MI Shortcut Parsing:} It detects and parses Mplus "shortcut" Measurement Invariance
+    outputs (where Configural, Metric, and Scalar models are reported in a single output file).
+    These are extracted as distinct rows in the table.
+  \item \strong{Robust Binding:} It handles models with mismatched summary columns (e.g., mixing
+    standard outputs with parsed text outputs) without errors.
+}
+
+The final output always displays the default fit indices:
+\code{"Models", "χ²(df)", "CFI", "TLI", "RMSEA", "SRMR"}
+and, if \code{diffTest = TRUE}, the default difference metrics:
+\code{"Δχ²", "p_Δχ²", "ΔCFI", "ΔRMSEA"}.
+
+If the user specifies additional indices (e.g., "AIC", "BIC") via the \code{indices} argument,
+those indices will be included in the fit chunk. If "AIC" or "BIC" are requested, their
+corresponding difference metrics (ΔAIC, ΔBIC) are automatically added to the difference chunk.
 }
 \details{
-The final output always displays the default fit indices:
-\code{"Models", "χ²/df", "χ²/df", "CFI", "TLI", "RMSEA", "SRMR"}
-and the default difference metrics:
-\code{"Δχ²", "p_Δχ²", "ΔCFI", "ΔRMSEA"}. If the user specifies additional indices
-(e.g., "AIC", "BIC") via the \code{indices} argument, then those indices will be included
-in the fit chunk, and their corresponding difference metrics (ΔAIC and/or ΔBIC) will be added
-to the diff chunk.
+This function creates a publication-ready table of fit indices for one or more Mplus models
+and computes difference metrics (e.g., ΔCFI, ΔRMSEA, Δχ²) between comparative models.
 }
 \examples{
 \dontrun{
-  # Assuming mod1 and mod2 are valid model objects with a 'summaries' element:
-  fit_table(mod1, mod2, indices = c("AIC", "BIC"), ref = "first", digits = 2)
-}
+  # Basic usage with a list of models
+  res <- MplusAutomation::readModels("target/path")
+  fit_table(res)
 
+  # Customized table with AIC/BIC and specific referencing
+  fit_table(res, indices = c("AIC", "BIC"), ref = "first", digits = 2)
+}
 }
