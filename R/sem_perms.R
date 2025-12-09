@@ -1,40 +1,52 @@
 #' -----------------------------------------------------------------------------
-#' @title       Run all permutations of a mediation/moderation SEM in Mplus
-#' @description Automatically generates Mplus ".inp" files for every permutation
-#'              of specified latent roles, runs them, and returns a combined
-#'              data.frame. The output includes model structure (role assignments),
-#'              standard fit indices (Chi-sq, df, CFI, TLI, RMSEA, SRMR), user-requested
-#'              additional indices (e.g., AIC, BIC), and specific parameter p-values.
-#'              Supports exclusion/fix rules, custom structural templates, covariates,
-#'              automatic long-line wrapping for Mplus, and robust error-handling.
+#' @title        Run all permutations of an SEM (Latent, Observed, or Hybrid) in Mplus
+#' @description  Automatically generates Mplus ".inp" files for every permutation
+#'               of specified variable roles, runs them, and returns a combined
+#'               data.frame.
+#'
+#'               This function supports:
+#'               \itemize{
+#'                 \item \strong{Latent Variable Models}: Standard SEM with measurement models.
+#'                 \item \strong{Observed Variable Models}: Path analysis using raw data columns.
+#'                 \item \strong{Hybrid Models}: Mix of latent and observed variables.
+#'                 \item \strong{Complex Syntax}: RI-CLPM or models with constraints (e.g., `@1`, `@0`).
+#'               }
+#'
+#'               The output includes model structure, standard fit indices, user-requested
+#'               indices, and specific parameter p-values.
 #'
 #' @param data           A data.frame containing all manifest indicators and covariates.
-#' @param latent_defs    A named character vector of measurement model strings.
-#'                       The function robustly extracts variable names from these strings
-#'                       by intersecting words with `names(data)`.
-#'                       E.g.
+#' @param latent_defs    A named list or character vector of variable definitions.
+#'                       The function automatically detects the type of definition:
+#'                       \itemize{
+#'                         \item \strong{Observed Variable}: If the value matches a column name in `data`,
+#'                               it is automatically formatted as `"var;"` for Mplus.
+#'                         \item \strong{Latent/Complex}: If the value is Mplus syntax (e.g., "F1 BY x1-x3;"),
+#'                               it is passed as-is.
+#'                       }
+#'                       Example:
 #'                       ```r
-#'                       c(
-#'                         x = "x by x1 x2 x3;",
-#'                         m1 = "m1 by m11 m12 m13;",
-#'                         ...
+#'                       list(
+#'                         # Latent definition
+#'                         "Stress" = "Stress BY s1 s2 s3;",
+#'                         # Observed definition (Auto-detected)
+#'                         "Age"    = "age_col"
 #'                       )
 #'                       ```
-#' @param roles          Character vector of latent roles to permute (default `c("x","m","y")`).
-#'                       These names will appear as column headers in the output data.frame
-#'                       to indicate which variable was assigned to which role.
+#' @param roles          Character vector of roles to permute (default `c("x","m","y")`).
+#'                       These names act as placeholders in `structural_tpl` and column headers in the result.
 #' @param covariate      Character vector of covariate names included in every model
 #'                       (default `NULL`).
 #' @param extra_var      Optional character vector of additional manifest variables to
 #'                       include in the `USEVARIABLES` list but not in the permutation logic.
-#' @param exclusion      List of vectors: each vector lists variable names (from `names(latent_defs)`)
+#' @param exclusion      List of vectors: each vector lists variable names (keys from `latent_defs`)
 #'                       that should not co-occur in the same model.
 #' @param fix            Named list: each element is a vector of variable names allowed
-#'                       for a specific role slot (e.g. `list(x = c("var1","var2"))`).
+#'                       for a specific role slot (e.g. `list(x = c("Stress","Anxiety"))`).
 #' @param analysis       String passed to Mplus "ANALYSIS:" block (default `"esti = ml;"`).
 #' @param structural_tpl User-supplied glue template for the "MODEL:" block. Use `{role_name}`
-#'                       placeholders (e.g., `{x}`, `{m}`) which will be replaced by actual
-#'                       variable names.
+#'                       placeholders (e.g., `{x}`, `{m}`) which will be replaced by the keys
+#'                       from `latent_defs`.
 #' @param output         String passed to Mplus "OUTPUT:" block (default `"stand;"`).
 #' @param out_dir        Directory in which to write `.inp` and `.out` files
 #'                       (default `"./"`).
@@ -59,69 +71,88 @@
 #' }
 #' @details
 #' \itemize{
-#'   \item \strong{Workflow}: The function generates all valid combinations of variables based on
-#'         \code{roles}, filters them using \code{exclusion} and \code{fix} constraints, and
-#'         processes them in three steps: Generate Input -> Run Mplus -> Extract Results.
+#'   \item \strong{Robust Variable Extraction}: The function uses a regex-based extractor to identify
+#'         required columns for `USEVARIABLES`. It handles syntax like `x1@1`, `x1-x5`, or `x*`
+#'         correctly by cleaning symbols before matching against `names(data)`.
 #'
 #'   \item \strong{Template Syntax}: The \code{structural_tpl} uses glue syntax. Placeholders
-#'         matching \code{roles} (e.g., \code{{x}}, \code{{m}}) are dynamically replaced by
-#'         the specific variable names in each iteration.
-#'
-#'   \item \strong{Input Safety}: It robustly extracts variable names for \code{USEVARIABLES}
-#'         by intersecting syntax words with your data columns (ignoring Mplus keywords like
-#'         "BY" or "ON"). It also \strong{automatically wraps long lines} (< 85 chars) to
-#'         prevent Mplus truncation errors.
+#'         matching \code{roles} (e.g., \code{{x}}) are replaced by the \strong{names} (keys)
+#'         of the `latent_defs` list.
 #'
 #'   \item \strong{Result Integrity}: Results are matched to models using the internal filename
-#'         ID found within the Mplus output. This ensures strict data alignment and prevents
-#'         \code{NA} rows caused by file sorting differences.
+#'         ID found within the Mplus output to ensure strict data alignment.
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Example 1: Simple Mediation
-#' data("latent_data")
 #'
-#' # 1. Define Measurement Models
-#' latent_defs <- c(
-#'   x  = "x_lat BY x1 x2 x3;",
-#'   m  = "m_lat BY m1 m2 m3;",
-#'   y  = "y_lat BY y1 y2 y3;",
-#'   w  = "w_lat BY w1 w2 w3;"
+#' # ==============================================================================
+#' # Example 1: Latent Variable Mediation (Standard SEM)
+#' # ==============================================================================
+#' # 1. Define Measurement Models (Mplus Syntax)
+#' latent_defs_sem <- list(
+#'   "Stress"     = "Stress BY s1 s2 s3;",
+#'   "Anxiety"    = "Anxiety BY a1 a2 a3;",
+#'   "Depression" = "Depression BY d1 d2 d3;",
+#'   "Burnout"    = "Burnout BY b1 b2 b3;"
 #' )
 #'
-#' # 2. Define Constraints
-#' # m and w cannot be in the same model
-#' exclusive_groups <- list(c("m", "w"))
-#' # y slot can only be y_lat
-#' fixed_groups     <- list(y = c("y"))
-#'
-#' # 3. Define Structural Template
-#' structural_tpl_med <- "
-#'   {m} ON {x} (a);
+#' # 2. Define Structural Template (Using placeholders)
+#' sem_structure <- "
 #'   {y} ON {m} (b);
-#'   {y} ON {x} (c);
+#'   {m} ON {x} (a);
+#'   {y} ON {x} (cp);
 #'   MODEL CONSTRAINT:
 #'   NEW(ind);
 #'   ind = a*b;
 #' "
 #'
-#' # 4. Run Permutations
-#' results <- sem_perms(
-#'   data           = latent_data,
-#'   latent_defs    = latent_defs,
-#'   roles          = c("x", "m", "y"),
-#'   structural_tpl = structural_tpl_med,
-#'   exclusion      = exclusive_groups,
-#'   fix            = fixed_groups,
-#'   covariate      = c("age", "gender"),
-#'   out_dir        = "./Mplus_Perms",
-#'   parameters     = c("ind"),         # Extract mediation p-value
-#'   indices        = c("AIC", "BIC")   # Extract extra fit indices
+#' # 3. Run Permutations
+#' res_sem <- sem_perms(
+#'   data = my_data,
+#'   latent_defs = latent_defs_sem,
+#'   roles = c("x", "m", "y"),
+#'   structural_tpl = sem_structure,
+#'   out_dir = "output_sem",
+#'   parameters = c("ind") # Extract indirect effect p-value
 #' )
 #'
-#' # View results
-#' head(results)
+#' # ==============================================================================
+#' # Example 2: Observed Variable Mediation (Path Analysis)
+#' # ==============================================================================
+#' # 1. Define Variables (Direct Column Names)
+#' # Note: You do NOT need to add semicolons ";" here. The function adds them automatically.
+#' obs_defs <- list(
+#'   "SES"       = "ses_score",    # Colname in data is 'ses_score'
+#'   "Education" = "edu_years",    # Colname in data is 'edu_years'
+#'   "Income"    = "inc_log",      # Colname in data is 'inc_log'
+#'   "Health"    = "health_idx"    # Colname in data is 'health_idx'
+#' )
+#'
+#' # 2. Define Structural Template
+#' # The structure logic is identical to SEM, but Mplus treats them as observed variables.
+#' path_structure <- "
+#'   {y} ON {m} (b);
+#'   {m} ON {x} (a);
+#'   {y} ON {x} (cp);
+#'
+#'   MODEL CONSTRAINT:
+#'   NEW(ind total);
+#'   ind = a*b;
+#'   total = ind + cp;
+#' "
+#'
+#' # 3. Run Permutations with Constraints
+#' res_path <- sem_perms(
+#'   data = my_data,
+#'   latent_defs = obs_defs,
+#'   roles = c("x", "m", "y"),
+#'   structural_tpl = path_structure,
+#'   # Example constraint: X must be SES or Education
+#'   fix = list(x = c("SES", "Education")),
+#'   out_dir = "output_path",
+#'   parameters = c("ind", "total")
+#' )
 #' }
 #' @importFrom MplusAutomation prepareMplusData runModels readModels
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
@@ -131,24 +162,25 @@
 #' @export
 sem_perms <- function(
     data,
-    latent_defs,
+    latent_defs,             # List of definitions. Keys match {placeholders}, Values are Mplus syntax or var names.
     roles = NULL,            # Roles to permute (e.g., c("x", "m", "y"))
-    covariate = NULL,        # Covariates for all models
-    extra_var = NULL,
-    exclusion = NULL,        # Exclusive-group constraints
-    fix = NULL,              # Fixed-group constraints
-    analysis = "esti = ml;", # Mplus analysis command
-    structural_tpl,          # User-provided structural template
-    output = "stand;",       # Mplus output command
-    out_dir = ".",
-    parameters = NULL,       # Specific model parameters to extract
-    indices = NULL,          # Additional fit indices
-    minimal_run = TRUE,
-    max_run = 10,
+    covariate = NULL,        # Covariates for all models (vector of strings)
+    extra_var = NULL,        # Any extra variables to include in USEVARIABLES
+    exclusion = NULL,        # List of character vectors for exclusive-group constraints
+    fix = NULL,              # List of character vectors for fixed-group constraints
+    analysis = "esti = ml;", # Mplus ANALYSIS command
+    structural_tpl,          # User-provided structural template (glue syntax)
+    output = "stand;",       # Mplus OUTPUT command
+    out_dir = ".",           # Directory for output files
+    parameters = NULL,       # Specific model parameters to extract (e.g., "ind", "ab")
+    indices = NULL,          # Additional fit indices to extract
+    minimal_run = TRUE,      # If TRUE, runs only a subset (defined by max_run)
+    max_run = 10,            # Maximum number of models to run if minimal_run is TRUE
     ...
 ) {
 
   # --- 1. Helper: Run Models ---
+  # Iterates through .inp files in the target directory and runs them using MplusAutomation.
   run_with_progress <- function(target) {
     files <- list.files(target, "\\.inp$", full.names = TRUE)
     if(length(files) == 0) return()
@@ -161,42 +193,36 @@ sem_perms <- function(
   }
 
   # --- 2. Helper: Clean Filename for Matching ---
-  # Removes directory path and extension to get the raw ID (e.g., "ait_al_ap")
+  # Removes directory path and extension to extract the raw Model ID.
   get_clean_id <- function(filepath) {
     if(is.null(filepath) || is.na(filepath)) return(NA_character_)
     tools::file_path_sans_ext(basename(filepath))
   }
 
   # --- 3. Helper: Extract Info from a SINGLE model result ---
+  # Parses Mplus output to extract fit indices, specific parameters, and warnings/errors.
   extract_model_info <- function(model_res, target_indices, target_params) {
-    # Initialize a single row dataframe
     out <- list()
 
-    # A. Extract ID from Filename (CRITICAL STEP)
-    # Use the filename recorded inside the summary to ensure matching
+    # Extract Model ID from filename to ensure correct merging later
     if (!is.null(model_res$summaries$Filename)) {
       out$Models <- get_clean_id(model_res$summaries$Filename)
     } else {
-      return(NULL) # Skip if no filename found
+      return(NULL)
     }
 
-    # B. Extract Fit Indices
+    # Extract Fit Indices
     sm <- model_res$summaries
     if (is.data.frame(sm)) {
       defaults <- c("ChiSqM_Value", "ChiSqM_DF", "CFI", "TLI", "RMSEA_Estimate", "SRMR")
       cols_to_get <- unique(c(defaults, target_indices))
-
       for (col in cols_to_get) {
-        if (col %in% names(sm)) {
-          val <- sm[[col]]
-          out[[col]] <- if(length(val)>0) as.numeric(val[1]) else NA_real_
-        } else {
-          out[[col]] <- NA_real_
-        }
+        # Check if column exists and extract the first value
+        out[[col]] <- if(col %in% names(sm) && length(sm[[col]])>0) as.numeric(sm[[col]][1]) else NA_real_
       }
     }
 
-    # C. Extract Parameters
+    # Extract Specific Parameters (e.g., P-values)
     if (!is.null(target_params)) {
       target_params <- toupper(target_params)
       # Initialize with NA
@@ -206,17 +232,15 @@ sem_perms <- function(
         dfp <- model_res$parameters$unstandardized
         if ("pval" %in% names(dfp)) {
           for (par in target_params) {
-            # Find the parameter
+            # Match parameter name (case-insensitive)
             idx <- which(toupper(dfp$param) == par)
-            if (length(idx) > 0) {
-              out[[par]] <- dfp$pval[idx[1]]
-            }
+            if (length(idx) > 0) out[[par]] <- dfp$pval[idx[1]]
           }
         }
       }
     }
 
-    # D. Warnings and Errors
+    # Check for Warnings and Errors
     n_warn <- length(model_res$warnings)
     n_err  <- length(model_res$errors)
     out$Warning <- ifelse(n_warn > 0, "Yes", "No")
@@ -225,11 +249,30 @@ sem_perms <- function(
     return(as.data.frame(out, stringsAsFactors = FALSE))
   }
 
+  # --- [NEW] Helper: Robust Variable Extraction ---
+  # Extracts pure variable names from complex Mplus syntax.
+  # It cleans out symbols like @1, *, -, ; to identify which columns from the dataset
+  # are actually required in USEVARIABLES.
+  extract_vars_robust <- function(syntax_str, data_names) {
+    if(is.null(syntax_str) || length(syntax_str) == 0) return(character(0))
+
+    # 1. Replace non-variable characters (keep alphanumeric and underscore) with spaces
+    #    Example: "x1@1" becomes "x1 1", "x1-x5" becomes "x1 x5"
+    clean_str <- gsub("[^A-Za-z0-9_]+", " ", syntax_str)
+
+    # 2. Split by whitespace and remove duplicates
+    tokens <- unique(unlist(strsplit(clean_str, "\\s+")))
+
+    # 3. Return only tokens that match actual column names in the dataset
+    intersect(tokens, data_names)
+  }
+
   # ------------------------------
   # MAIN LOGIC
   # ------------------------------
 
   # 1. Prepare Data & Permutations
+  # Create a permutation matrix based on available definitions and roles
   pool <- names(latent_defs)
   n_roles <- length(roles)
   perm_mat <- gtools::permutations(n = length(pool), r = n_roles, v = pool)
@@ -237,6 +280,7 @@ sem_perms <- function(
   names(perm_df) <- roles
 
   # 2. Exclusion Rules
+  # Remove rows where multiple variables from the same exclusive group appear
   if (!is.null(exclusion)) {
     for (vals in exclusion) {
       perm_df <- perm_df %>%
@@ -245,6 +289,7 @@ sem_perms <- function(
   }
 
   # 3. Fix Rules
+  # Restrict specific roles to specific subsets of variables
   if (!is.null(fix)) {
     for (col in names(fix)) {
       if (col %in% names(perm_df)) {
@@ -253,45 +298,77 @@ sem_perms <- function(
     }
   }
 
-  # 4. Minimal Run
+  # 4. Minimal Run (For testing purposes)
   if (isTRUE(minimal_run)) {
     n_keep <- min(nrow(perm_df), max_run)
     perm_df <- perm_df[seq_len(n_keep), , drop = FALSE]
   }
 
-  # 5. Generate ID Column
+  # 5. Generate Unique Model ID
   perm_df$Models <- apply(perm_df[, roles, drop=FALSE], 1, paste, collapse = "_")
 
   # 6. Prepare Mplus Files
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+  # Convert R data to Mplus .dat format
   header <- MplusAutomation::prepareMplusData(data, file.path(out_dir, "data.dat"))
 
-  # Variable block extraction
+  # Extract variable names header from prepareMplusData output
+  # This ensures the input file matches the .dat file structure
   var_chunk <- paste0(grep("NAMES =", header, value = TRUE, ignore.case = TRUE), collapse="\n")
   if(var_chunk == "") var_chunk <- paste0(header[header %in% grep("NAMES =", header, value=T)], collapse=" ")
   if(var_chunk == "") var_chunk <- paste0("NAMES = ", paste(names(data), collapse=" "), ";")
+
+  # Check for missing value declaration
   miss_line <- grep("MISSING", header, value=TRUE, ignore.case=TRUE)
   if(length(miss_line) > 0) var_chunk <- paste(var_chunk, miss_line[1], sep="\n")
 
-  # 7. Write .inp Files
+  # 7. Write .inp Files (Loop through permutations)
   write_mplus_input <- function(txt, fn, dir) writeLines(txt, file.path(dir, paste0(fn, ".inp")))
 
   for (i in seq_len(nrow(perm_df))) {
     this_row <- as.list(perm_df[i, roles, drop = FALSE])
     indices_vec <- unlist(this_row, use.names = FALSE)
 
-    # Robust Variable Extraction
-    current_latent_syntax <- paste(unname(latent_defs[indices_vec]), collapse = "\n")
-    combined_text <- paste(current_latent_syntax, paste(covariate, collapse = " "), paste(extra_var, collapse = " "))
-    all_tokens <- unlist(strsplit(gsub("[\n\t;]", " ", combined_text), "\\s+"))
-    valid_items <- intersect(all_tokens, names(data))
+    # --- [MODIFIED LOGIC START] ---
 
-    # Handle Line Wrapping
+    # A. Smart Handling of Latent Definitions
+    # Iterates through selected definitions.
+    # - If a definition is just a single variable name found in the data -> Treat as Observed Variable.
+    #   (Automatically adds ";" to request variance estimation).
+    # - If a definition is complex (contains "BY", "@", etc.) -> Treat as Mplus Syntax.
+    current_defs_list <- lapply(latent_defs[indices_vec], function(def) {
+      if (length(def) == 1 && def %in% names(data)) {
+        return(paste0(def, ";")) # Transform "var" to "var;"
+      } else {
+        return(def) # Keep complex syntax as is
+      }
+    })
+    current_latent_syntax <- paste(unlist(current_defs_list), collapse = "\n")
+
+    # B. Robust Variable Extraction (Generating USEVARIABLES)
+    # Combine all syntax parts that might contain variable names
+    combined_text <- paste(
+      current_latent_syntax,
+      paste(covariate, collapse = " "),
+      paste(extra_var, collapse = " ")
+    )
+
+    # Extract only valid column names from the text to populate USEVARIABLES
+    valid_items <- extract_vars_robust(combined_text, names(data))
+
+    # --- [MODIFIED LOGIC END] ---
+
+    # Format USEVARIABLES string with line wrapping (width=85)
     usevariable <- paste(strwrap(paste(valid_items, collapse = " "), width = 85), collapse = "\n      ")
 
+    # Prepare Covariate string
     cov_str = paste0(covariate, collapse = " ")
+
+    # Fill placeholders in the structural template using current permutation roles
     structure_syntax <- glue::glue_data(this_row, structural_tpl, cov = cov_str)
 
+    # Assemble the final Mplus Input String
     syntax_string <- glue::glue(
       "TITLE: Permutation run {i};
       DATA: FILE = data.dat;
@@ -307,6 +384,8 @@ sem_perms <- function(
     )
 
     filename <- perm_df$Models[i]
+
+    # Write to file (Compatibility check for external writer functions)
     if (exists("create_mplus_inp") && is.function(create_mplus_inp)) {
       create_mplus_inp(syntax_string, filename, out_dir, overwrite = TRUE)
     } else {
@@ -318,16 +397,15 @@ sem_perms <- function(
   run_with_progress(out_dir)
 
   # 9. Read Models
-  # IMPORTANT: recursive=FALSE ensures we don't pick up old nested runs
+  # Recursive=FALSE prevents reading subdirectories or old runs
   res_list <- MplusAutomation::readModels(out_dir, what = c("warn_err", "summaries", "parameters"), quiet = TRUE, recursive = FALSE)
 
   if (is.null(res_list) || length(res_list) == 0) {
-    warning("No Mplus output files read. Please check the 'out_dir' for .out files.")
-    return(perm_df) # Return just the structure if run failed
+    warning("No Mplus output files read. Please check the directory.")
+    return(perm_df)
   }
 
-  # 10. Extract Results into a DataFrame
-  # Loop through list and build a data frame of results
+  # 10. Extract Results into DataFrame
   results_list <- lapply(res_list, extract_model_info, target_indices = indices, target_params = parameters)
   results_df <- dplyr::bind_rows(results_list)
 
@@ -337,32 +415,25 @@ sem_perms <- function(
   }
 
   # 11. Merge Results with Permutation Map
-  # Use inner_join or left_join based on 'Models' column
   final_df <- dplyr::left_join(perm_df, results_df, by = "Models")
 
-  # 12. Rename Columns (Indices)
+  # 12. Rename Standard Columns
   rename_map <- c(
-    "ChiSqM_Value" = "\u03c7\u00b2", # Chi-sq symbol
-    "ChiSqM_DF"    = "df",
+    "ChiSqM_Value"   = "\u03c7\u00b2", # Chi-square symbol
+    "ChiSqM_DF"      = "df",
     "RMSEA_Estimate" = "RMSEA"
   )
-
   cols <- colnames(final_df)
   for (old in names(rename_map)) {
     if (old %in% cols) colnames(final_df)[cols == old] <- rename_map[old]
   }
 
-  # 13. Final Column Reordering (Models -> Roles -> Indices -> Warn/Err)
-  # Identify fit columns (all cols that are not Models, Roles, Warning, Error)
+  # 13. Final Column Reordering
+  # Order: Models -> Roles -> Fit Indices -> Warnings/Errors
   all_cols <- names(final_df)
   special_cols <- c("Models", roles, "Warning", "Error")
   fit_cols <- setdiff(all_cols, special_cols)
-
-  # Reorder: Models, Roles, Fit Indices, Warning, Error
-  final_order <- c("Models", roles, fit_cols, "Warning", "Error")
-
-  # Keep only columns that actually exist
-  final_order <- intersect(final_order, names(final_df))
+  final_order <- intersect(c("Models", roles, fit_cols, "Warning", "Error"), names(final_df))
 
   return(final_df[, final_order, drop = FALSE])
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/sem_perms.R
 \name{sem_perms}
 \alias{sem_perms}
-\title{Run all permutations of a mediation/moderation SEM in Mplus}
+\title{Run all permutations of an SEM (Latent, Observed, or Hybrid) in Mplus}
 \usage{
 sem_perms(
   data,
@@ -26,21 +26,26 @@ sem_perms(
 \arguments{
 \item{data}{A data.frame containing all manifest indicators and covariates.}
 
-\item{latent_defs}{A named character vector of measurement model strings.
-The function robustly extracts variable names from these strings
-by intersecting words with `names(data)`.
-E.g.
+\item{latent_defs}{A named list or character vector of variable definitions.
+The function automatically detects the type of definition:
+\itemize{
+  \item \strong{Observed Variable}: If the value matches a column name in `data`,
+        it is automatically formatted as `"var;"` for Mplus.
+  \item \strong{Latent/Complex}: If the value is Mplus syntax (e.g., "F1 BY x1-x3;"),
+        it is passed as-is.
+}
+Example:
 ```r
-c(
-  x = "x by x1 x2 x3;",
-  m1 = "m1 by m11 m12 m13;",
-  ...
+list(
+  # Latent definition
+  "Stress" = "Stress BY s1 s2 s3;",
+  # Observed definition (Auto-detected)
+  "Age"    = "age_col"
 )
 ```}
 
-\item{roles}{Character vector of latent roles to permute (default `c("x","m","y")`).
-These names will appear as column headers in the output data.frame
-to indicate which variable was assigned to which role.}
+\item{roles}{Character vector of roles to permute (default `c("x","m","y")`).
+These names act as placeholders in `structural_tpl` and column headers in the result.}
 
 \item{covariate}{Character vector of covariate names included in every model
 (default `NULL`).}
@@ -48,17 +53,17 @@ to indicate which variable was assigned to which role.}
 \item{extra_var}{Optional character vector of additional manifest variables to
 include in the `USEVARIABLES` list but not in the permutation logic.}
 
-\item{exclusion}{List of vectors: each vector lists variable names (from `names(latent_defs)`)
+\item{exclusion}{List of vectors: each vector lists variable names (keys from `latent_defs`)
 that should not co-occur in the same model.}
 
 \item{fix}{Named list: each element is a vector of variable names allowed
-for a specific role slot (e.g. `list(x = c("var1","var2"))`).}
+for a specific role slot (e.g. `list(x = c("Stress","Anxiety"))`).}
 
 \item{analysis}{String passed to Mplus "ANALYSIS:" block (default `"esti = ml;"`).}
 
 \item{structural_tpl}{User-supplied glue template for the "MODEL:" block. Use `{role_name}`
-placeholders (e.g., `{x}`, `{m}`) which will be replaced by actual
-variable names.}
+placeholders (e.g., `{x}`, `{m}`) which will be replaced by the keys
+from `latent_defs`.}
 
 \item{output}{String passed to Mplus "OUTPUT:" block (default `"stand;"`).}
 
@@ -92,80 +97,106 @@ A data.frame with the following columns:
 }
 \description{
 Automatically generates Mplus ".inp" files for every permutation
-             of specified latent roles, runs them, and returns a combined
-             data.frame. The output includes model structure (role assignments),
-             standard fit indices (Chi-sq, df, CFI, TLI, RMSEA, SRMR), user-requested
-             additional indices (e.g., AIC, BIC), and specific parameter p-values.
-             Supports exclusion/fix rules, custom structural templates, covariates,
-             automatic long-line wrapping for Mplus, and robust error-handling.
+              of specified variable roles, runs them, and returns a combined
+              data.frame.
+
+              This function supports:
+              \itemize{
+                \item \strong{Latent Variable Models}: Standard SEM with measurement models.
+                \item \strong{Observed Variable Models}: Path analysis using raw data columns.
+                \item \strong{Hybrid Models}: Mix of latent and observed variables.
+                \item \strong{Complex Syntax}: RI-CLPM or models with constraints (e.g., `@1`, `@0`).
+              }
+
+              The output includes model structure, standard fit indices, user-requested
+              indices, and specific parameter p-values.
 }
 \details{
 -----------------------------------------------------------------------------
 
 
 \itemize{
-  \item \strong{Workflow}: The function generates all valid combinations of variables based on
-        \code{roles}, filters them using \code{exclusion} and \code{fix} constraints, and
-        processes them in three steps: Generate Input -> Run Mplus -> Extract Results.
+  \item \strong{Robust Variable Extraction}: The function uses a regex-based extractor to identify
+        required columns for `USEVARIABLES`. It handles syntax like `x1@1`, `x1-x5`, or `x*`
+        correctly by cleaning symbols before matching against `names(data)`.
 
   \item \strong{Template Syntax}: The \code{structural_tpl} uses glue syntax. Placeholders
-        matching \code{roles} (e.g., \code{{x}}, \code{{m}}) are dynamically replaced by
-        the specific variable names in each iteration.
-
-  \item \strong{Input Safety}: It robustly extracts variable names for \code{USEVARIABLES}
-        by intersecting syntax words with your data columns (ignoring Mplus keywords like
-        "BY" or "ON"). It also \strong{automatically wraps long lines} (< 85 chars) to
-        prevent Mplus truncation errors.
+        matching \code{roles} (e.g., \code{{x}}) are replaced by the \strong{names} (keys)
+        of the `latent_defs` list.
 
   \item \strong{Result Integrity}: Results are matched to models using the internal filename
-        ID found within the Mplus output. This ensures strict data alignment and prevents
-        \code{NA} rows caused by file sorting differences.
+        ID found within the Mplus output to ensure strict data alignment.
 }
 }
 \examples{
 \dontrun{
-# Example 1: Simple Mediation
-data("latent_data")
 
-# 1. Define Measurement Models
-latent_defs <- c(
-  x  = "x_lat BY x1 x2 x3;",
-  m  = "m_lat BY m1 m2 m3;",
-  y  = "y_lat BY y1 y2 y3;",
-  w  = "w_lat BY w1 w2 w3;"
+# ==============================================================================
+# Example 1: Latent Variable Mediation (Standard SEM)
+# ==============================================================================
+# 1. Define Measurement Models (Mplus Syntax)
+latent_defs_sem <- list(
+  "Stress"     = "Stress BY s1 s2 s3;",
+  "Anxiety"    = "Anxiety BY a1 a2 a3;",
+  "Depression" = "Depression BY d1 d2 d3;",
+  "Burnout"    = "Burnout BY b1 b2 b3;"
 )
 
-# 2. Define Constraints
-# m and w cannot be in the same model
-exclusive_groups <- list(c("m", "w"))
-# y slot can only be y_lat
-fixed_groups     <- list(y = c("y"))
-
-# 3. Define Structural Template
-structural_tpl_med <- "
-  {m} ON {x} (a);
+# 2. Define Structural Template (Using placeholders)
+sem_structure <- "
   {y} ON {m} (b);
-  {y} ON {x} (c);
+  {m} ON {x} (a);
+  {y} ON {x} (cp);
   MODEL CONSTRAINT:
   NEW(ind);
   ind = a*b;
 "
 
-# 4. Run Permutations
-results <- sem_perms(
-  data           = latent_data,
-  latent_defs    = latent_defs,
-  roles          = c("x", "m", "y"),
-  structural_tpl = structural_tpl_med,
-  exclusion      = exclusive_groups,
-  fix            = fixed_groups,
-  covariate      = c("age", "gender"),
-  out_dir        = "./Mplus_Perms",
-  parameters     = c("ind"),         # Extract mediation p-value
-  indices        = c("AIC", "BIC")   # Extract extra fit indices
+# 3. Run Permutations
+res_sem <- sem_perms(
+  data = my_data,
+  latent_defs = latent_defs_sem,
+  roles = c("x", "m", "y"),
+  structural_tpl = sem_structure,
+  out_dir = "output_sem",
+  parameters = c("ind") # Extract indirect effect p-value
 )
 
-# View results
-head(results)
+# ==============================================================================
+# Example 2: Observed Variable Mediation (Path Analysis)
+# ==============================================================================
+# 1. Define Variables (Direct Column Names)
+# Note: You do NOT need to add semicolons ";" here. The function adds them automatically.
+obs_defs <- list(
+  "SES"       = "ses_score",    # Colname in data is 'ses_score'
+  "Education" = "edu_years",    # Colname in data is 'edu_years'
+  "Income"    = "inc_log",      # Colname in data is 'inc_log'
+  "Health"    = "health_idx"    # Colname in data is 'health_idx'
+)
+
+# 2. Define Structural Template
+# The structure logic is identical to SEM, but Mplus treats them as observed variables.
+path_structure <- "
+  {y} ON {m} (b);
+  {m} ON {x} (a);
+  {y} ON {x} (cp);
+
+  MODEL CONSTRAINT:
+  NEW(ind total);
+  ind = a*b;
+  total = ind + cp;
+"
+
+# 3. Run Permutations with Constraints
+res_path <- sem_perms(
+  data = my_data,
+  latent_defs = obs_defs,
+  roles = c("x", "m", "y"),
+  structural_tpl = path_structure,
+  # Example constraint: X must be SES or Education
+  fix = list(x = c("SES", "Education")),
+  out_dir = "output_path",
+  parameters = c("ind", "total")
+)
 }
 }
