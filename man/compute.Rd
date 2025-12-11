@@ -4,107 +4,92 @@
 \alias{compute}
 \title{Compute New Variables by Aggregating Multiple Columns}
 \usage{
-compute(.data, ...)
+compute(.data, ..., .method = mean, .na.rm = TRUE)
 }
 \arguments{
-\item{.data}{A data frame or tibble containing the source variables}
+\item{.data}{A data frame or tibble containing the source variables.}
 
-\item{...}{Variable specifications followed by aggregation function and options:
+\item{...}{Named arguments defining new variables to create. The value of each
+argument should be a selection of columns using:
 \itemize{
-  \item **Named variable specifications** using one of three methods:
-    \itemize{
-      \item \strong{Pattern + Index:} \code{var_name = "pattern{i}", indices}
-            (e.g., \code{score1 = "item{i}", 1:5})
-      \item \strong{Explicit Vector:} \code{var_name = c("var1", "var2", ...)}
-            (e.g., \code{score2 = c("item1", "item3", "item5")})
-      \item \strong{Variable Range (Position-Based):} \code{var_name = "start_var:end_var"}
-            Selects all columns from start_var to end_var based on their positions
-            in the data frame, regardless of naming patterns. Supports reverse order.
-    }
-  \item **Aggregation function** as unnamed argument (e.g., \code{mean}, \code{sum}, \code{median})
-  \item **Optional \code{na.rm}** logical argument for handling missing values
+  \item \strong{Standard Tidyselect:} \code{var1:var5}, \code{starts_with("item")}, \code{c(var1, var2)}.
+  \item \strong{Pattern Helper:} \code{pattern("item{i}", 1:5)} for constructing names dynamically.
 }}
+
+\item{.method}{The aggregation function to apply (e.g., \code{mean}, \code{sum}).
+Defaults to \code{mean}.}
+
+\item{.na.rm}{Logical. Should missing values be removed during aggregation?
+Defaults to \code{FALSE}.}
 }
 \value{
-A data frame identical to \code{.data} with additional computed variables
-  appended as new columns. Original columns remain unchanged.
+A data frame identical to \code{.data} with the new computed variables appended.
 }
 \description{
-Creates new variables by applying aggregation functions (mean, sum, etc.) to
-multiple columns using flexible variable selection methods. Supports three
-approaches: pattern-based indexing, explicit variable vectors, and variable ranges.
-Designed to work seamlessly with dplyr pipelines.
+Creates new variables by applying aggregation functions (e.g., \code{mean}, \code{sum})
+to multiple columns. It leverages \code{tidyselect} syntax for flexible variable
+selection, including ranges, specific names, and a custom \code{pattern()} helper.
 }
 \details{
-**Variable Selection Methods:**
+\strong{Variable Selection:}
+This function supports full \code{dplyr}-style selection. You can use:
+\itemize{
+  \item \code{item1:item5} (ranges)
+  \item \code{c(item1, item3, item5)} (specific columns)
+  \item \code{starts_with("A")}, \code{contains("scale")} (helpers)
+  \item \code{pattern("Q{i}_rev", 1:5)} (custom pattern helper)
+}
 
-\strong{Pattern Method:} Uses a pattern string containing \code{{i}} placeholder
-followed by numeric indices. The pattern \code{"item{i}"} with indices \code{1:5}
-expands to \code{c("item1", "item2", "item3", "item4", "item5")}.
+\strong{Performance Optimization:}
+If \code{.method} is set to \code{mean} or \code{sum}, the function automatically
+switches to the highly optimized \code{rowMeans()} or \code{rowSums()} base R functions.
+For other functions (e.g., \code{sd}, \code{median}), it falls back to \code{apply()},
+which may be slower on large datasets.
 
-\strong{Explicit Vector Method:} Directly specify column names as a character vector.
-Useful for non-sequential or custom variable selections.
-
-\strong{Variable Range Method (Position-Based):} Use colon notation \code{"start:end"}
-to select all columns between the positions of the start and end variables (inclusive).
-The start and end variables do not need to share prefixes or follow any naming pattern.
-Selection is based purely on column positions in the data frame. If start appears
-after end, selection proceeds in reverse order.
-
-**Performance Optimization:** For \code{mean} and \code{sum} functions with multiple
-columns, the function uses optimized \code{rowMeans()} and \code{rowSums()}
-implementations. Other functions use \code{apply()} row-wise computation.
-
-**Error Handling:** Missing columns generate warnings but don't stop execution.
-All selected columns must be numeric. If no valid columns are found for a
-specification, the result variable is filled with \code{NA}.
+\strong{Error Handling:}
+\itemize{
+  \item If a selection matches no columns, the new variable is created and filled with \code{NA},
+  and a warning is issued.
+  \item If non-numeric columns are selected, an error will occur during computation.
+}
 }
 \examples{
 library(dplyr)
 
-# Create sample data with mixed naming patterns
-set.seed(123)
-data <- data.frame(
-  id = 1:100,
-  item1 = rnorm(100, 3, 1),
-  item2 = rnorm(100, 3, 1),
-  height = rnorm(100, 170, 10),
-  weight = rnorm(100, 70, 15),
-  score_a = rnorm(100, 85, 10),
-  score_b = rnorm(100, 88, 12),
-  final_grade = rnorm(100, 90, 8),
-  temperature = rnorm(100, 25, 5)
+# Create sample data
+df <- data.frame(
+  id = 1:5,
+  A1 = c(1, 2, 3, 4, 5),
+  A2 = c(2, 2, 3, 4, 4),
+  A3 = c(1, 1, 1, 1, 1),
+  B_1 = c(5, 4, 3, 2, 1),
+  B_2 = c(5, 5, 4, 4, 3),
+  chk_1 = c(1, 0, 1, 0, 1),
+  chk_2 = c(0, 1, 0, 1, 0)
 )
 
-# Position-based range selection (NEW FUNCTIONALITY)
-# Works regardless of naming patterns
-data_ranges <- data \%>\%
+# 1. Basic Range Selection (Standard Tidyselect)
+result <- df \%>\%
   compute(
-    physical_measures = "height:score_b",    # Columns 4-6: height, weight, score_a, score_b
-    mixed_range = "item1:weight",           # Columns 2-4: item1, item2, height, weight
-    end_range = "score_a:temperature",      # Columns 5-8: score_a, score_b, final_grade, temperature
-    mean, na.rm = TRUE
+    scale_A = A1:A3,
+    .method = mean
   )
 
-# Traditional pattern method still works
-data_pattern <- data \%>\%
+# 2. Using the pattern() helper for complex names
+result <- df \%>\%
   compute(
-    item_mean = "item{i}", 1:2,
-    mean, na.rm = TRUE
+    scale_B = pattern("B_{i}", 1:2),
+    .method = sum
   )
 
-# Explicit vector method
-data_explicit <- data \%>\%
+# 3. Combining methods + na.rm
+result <- df \%>\%
   compute(
-    custom_score = c("height", "final_grade", "temperature"),
-    mean, na.rm = TRUE
-  )
-
-# Reverse order range selection
-data_reverse <- data \%>\%
-  compute(
-    reverse_range = "temperature:score_a",  # Selects in reverse: temperature, final_grade, score_b, score_a
-    mean, na.rm = TRUE
+    scale_A = A1:A3,
+    scale_B = pattern("B_{i}", 1:2),
+    check_score = starts_with("chk"),
+    .method = mean,
+    .na.rm = TRUE
   )
 
 }
