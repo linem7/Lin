@@ -96,9 +96,10 @@ pattern <- function(str, n) {
 #'     .method = mean,
 #'     .na.rm = TRUE
 #'   )
-#'
+#' @importFrom rlang enquos
+#' @importFrom tidyselect eval_select
 #' @export
-compute <- function(.data, ..., .method = mean, .na.rm = TRUE) {
+compute <- function(.data, ..., .method = mean, .na.rm = FALSE) {
 
   # 1. Capture the '...' arguments (the new variables to create)
   #    This allows us to handle input like: scale_a = item1:item5

@@ -4,7 +4,7 @@
 \alias{compute}
 \title{Compute New Variables by Aggregating Multiple Columns}
 \usage{
-compute(.data, ..., .method = mean, .na.rm = TRUE)
+compute(.data, ..., .method = mean, .na.rm = FALSE)
 }
 \arguments{
 \item{.data}{A data frame or tibble containing the source variables.}
@@ -91,5 +91,4 @@ result <- df \%>\%
     .method = mean,
     .na.rm = TRUE
   )
-
 }
