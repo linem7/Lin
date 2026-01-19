@@ -2,7 +2,7 @@
 % Please edit documentation in R/likertize_zscore.R
 \name{likertize_zscore}
 \alias{likertize_zscore}
-\title{Convert Z-scores to a Likert scale (with optional skew)}
+\title{Convert Z-scores to a Likert scale (skew-normal reference)}
 \usage{
 likertize_zscore(z_score, n_levels = 5, skew = 0)
 }
@@ -12,51 +12,56 @@ Missing values are preserved.}
 
 \item{n_levels}{Integer (>= 2). Number of Likert categories to create. Defaults to 5.}
 
-\item{skew}{Numeric, controls asymmetry of the **target** density used to set the cuts.
-Use \code{0} for symmetric normal (default). Nonzero values induce skewness via the
-skew-normal family. This argument is transformed to a skew-normal \code{alpha}
-(shape) by \eqn{ \alpha = \frac{\text{skew}}{\sqrt{1-\text{skew}^2}} \sqrt{2/\pi} }.
-Reasonable range is \code{-0.95} to \code{0.95}. Extreme values may be unstable.}
+\item{skew}{Numeric. The skew-normal shape parameter \code{alpha} used to define the
+  reference density when computing cutpoints. Use \code{0} for a symmetric normal
+  reference. Positive values shift probability mass toward higher categories; negative
+  values shift probability mass toward lower categories.
+
+  Practical guidance: \code{abs(skew) <= 3} often yields mild to moderate skew in the
+  induced category proportions. Larger magnitudes may cause highly imbalanced categories,
+  including empty or near-empty levels, which can reduce information for downstream analyses.}
 }
 \value{
-An integer vector with values in \code{1:n_levels}. If \code{as.ordered} behavior
-  is desired, convert the result to \code{ordered()} outside this function.
+An integer vector with values in \code{1:n_levels}. If ordered-factor output is
+  desired, convert the result using \code{ordered()} outside this function.
 }
 \description{
 Discretizes continuous Z-scores into \eqn{1..n\_levels} Likert categories so that
-the **marginal category proportions** follow either:
-(a) the standard normal density (when `skew = 0`), or
-(b) a univariate skew-normal density (when `skew != 0`).
+the **marginal category proportions** follow a chosen reference density:
+\itemize{
+  \item standard normal when \code{skew = 0}
+  \item univariate skew-normal when \code{skew != 0}, where \code{skew} is the skew-normal
+        shape parameter \code{alpha}
+}
 }
 \details{
-Internally, this function uses a helper \code{discretize_density()} to compute
-\emph{endpoints} that partition the real line into \code{n_levels} bins whose
-areas (probabilities) match the target density. It then cuts the input \code{z_score}
-at those endpoints and relabels the bins as integer Likert levels.
+Internally, this function calls \code{discretize_density()} to compute endpoints that
+partition the real line into \code{n_levels} bins whose areas match the target density,
+then bins \code{z_score} using those endpoints.
 
 
-- This function **does not** re-estimate any density from the data. It only uses the
-  chosen reference density (normal or skew-normal) to define **proportionally balanced
-  cutpoints** and then bins the provided \code{z_score}.
+- This function does not estimate any density from the data. It only uses the chosen
+  reference density (normal or skew-normal) to define proportional cutpoints, then bins
+  the provided \code{z_score}.
 - The helper \code{discretize_density(density_fn, n_levels, eps)} must exist in your
-  environment (usually elsewhere in the same package). It is expected to return a list
-  with a numeric vector \code{endp} of length \code{n_levels + 1}, i.e., the cumulative
-  probability endpoints (on the Z-scale) that define the category boundaries.
+  environment. It is expected to return a list with numeric vector \code{endp} of length
+  \code{n_levels + 1}, the endpoints on the Z-scale that define the category boundaries.
 }
 \examples{
-# Basic: 5-point Likert with symmetric category proportions
 set.seed(1)
 z <- rnorm(1000)
-x5 <- likertize_zscore(z, n_levels = 5)
-table(x5) / length(x5)  # ~balanced under normal reference
 
-# Skewed category proportions (right-skew in the reference density)
-x5_skew <- likertize_zscore(z, n_levels = 5, skew = 0.5)
-table(x5_skew) / length(x5_skew)
+# 5-point, symmetric reference
+x5 <- likertize_zscore(z, n_levels = 5, skew = 0)
+table(x5) / length(x5)
 
-# 7-point scale
-x7 <- likertize_zscore(z, n_levels = 7)
-head(x7)
+# 5-point, skew-normal reference (shape = 2)
+x5_s2 <- likertize_zscore(z, n_levels = 5, skew = 2)
+table(x5_s2) / length(x5_s2)
+
+# stronger skew (shape = 5), may yield imbalanced categories
+x5_s5 <- likertize_zscore(z, n_levels = 5, skew = 5)
+table(x5_s5) / length(x5_s5)
 
 }
 \seealso{

@@ -14,19 +14,20 @@ Non-target columns are copied through unchanged.}
 \itemize{
   \item \code{vars}: character vector of column names in \code{data} to convert.
   \item \code{n_levels}: integer (>= 2), number of Likert levels for these \code{vars}.
-  \item \code{skew}: numeric, passed to \code{\link{likertize_zscore}} (\code{0} for symmetric).
+  \item \code{skew}: numeric, passed to \code{\link{likertize_zscore}}. Here \code{skew}
+    is the skew-normal shape parameter used to define the reference density (\code{0} for symmetric).
 }
 Example:
 \preformatted{
 var_config <- list(
   list(vars = c("z_a", "z_b"), n_levels = 5, skew = 0),
-  list(vars = "z_c",          n_levels = 7, skew = 0.4)
+  list(vars = "z_c",           n_levels = 7, skew = 2)
 )
 }}
 
 \item{as_ordered}{Logical. If \code{TRUE}, converts the resulting integer categories to
-\code{ordered} factors with levels \code{1:max_level} per variable (where \code{max_level}
-is inferred from the realized data). Defaults to \code{FALSE}.}
+\code{ordered} factors with fixed levels \code{1:n_levels} for each variable, based on its
+configuration. Defaults to \code{FALSE}.}
 }
 \value{
 A data frame of the same class as \code{data}, with the specified variables
@@ -35,32 +36,31 @@ A data frame of the same class as \code{data}, with the specified variables
 \description{
 Applies \code{\link{likertize_zscore}} across groups of variables in a data frame,
 using per-group settings for the number of Likert levels and optional skew.
-The function **does not** re-estimate densities from the data; it only uses
-the chosen reference density to define proportionally balanced cutpoints and then bins.
+The function does not re-estimate densities from the data; it only uses the chosen
+reference density to define proportionally balanced cutpoints and then bins.
 }
 \details{
 - Variables listed in \code{var_config} that are not found in \code{data} trigger a warning and are skipped.
 - If a target variable contains \code{NA}, they are preserved.
-- If different groups in \code{var_config} reference the same variable name, the **last** occurrence wins.
+- If different groups in \code{var_config} reference the same variable name, the last occurrence wins.
+- When \code{as_ordered = TRUE}, factor levels are fixed to \code{1:n_levels} from the final config for that variable.
 }
 \examples{
 set.seed(1)
 df <- data.frame(
   z_a = rnorm(1000),
-  z_b = rnorm(1000, mean = 0.3),   # still treated as Z-like for discretization cuts
+  z_b = rnorm(1000, mean = 0.3),
   z_c = rnorm(1000)
 )
 
-# Configuration: 5-level symmetric for z_a/z_b; 7-level right-skew for z_c
 cfg <- list(
   list(vars = c("z_a", "z_b"), n_levels = 5, skew = 0),
-  list(vars = "z_c",           n_levels = 7, skew = 0.5)
+  list(vars = "z_c",           n_levels = 7, skew = 2)
 )
 
 out <- convert_to_likert_batch(df, cfg)
-head(out_ord)
+head(out)
 
-# Ordered-factor output
 out_ord <- convert_to_likert_batch(df, cfg, as_ordered = TRUE)
 head(out_ord)
 
