@@ -2,6 +2,7 @@
 
 export("%>%")
 export(apa)
+export(ave_table)
 export(coeff_table)
 export(coeff_table_logit)
 export(compute)
