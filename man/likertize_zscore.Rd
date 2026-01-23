@@ -13,13 +13,17 @@ Missing values are preserved.}
 \item{n_levels}{Integer (>= 2). Number of Likert categories to create. Defaults to 5.}
 
 \item{skew}{Numeric. The skew-normal shape parameter \code{alpha} used to define the
-  reference density when computing cutpoints. Use \code{0} for a symmetric normal
-  reference. Positive values shift probability mass toward higher categories; negative
-  values shift probability mass toward lower categories.
-
-  Practical guidance: \code{abs(skew) <= 3} often yields mild to moderate skew in the
-  induced category proportions. Larger magnitudes may cause highly imbalanced categories,
-  including empty or near-empty levels, which can reduce information for downstream analyses.}
+reference density. Use \code{0} for a symmetric normal reference.
+\itemize{
+  \item \strong{Positive skew (\code{skew > 0}):} Creates a right-skewed distribution
+    (long tail to the right). The probability mass concentrates in **lower** categories
+    (e.g., more 1s and 2s).
+  \item \strong{Negative skew (\code{skew < 0}):} Creates a left-skewed distribution
+    (long tail to the left). The probability mass concentrates in **higher** categories
+    (e.g., more 4s and 5s).
+}
+Practical guidance: \code{abs(skew) <= 3} often yields mild to moderate skew.
+Larger magnitudes may cause highly imbalanced categories (e.g., empty levels).}
 }
 \value{
 An integer vector with values in \code{1:n_levels}. If ordered-factor output is

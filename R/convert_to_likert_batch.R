@@ -11,8 +11,10 @@
 #'   \itemize{
 #'     \item \code{vars}: character vector of column names in \code{data} to convert.
 #'     \item \code{n_levels}: integer (>= 2), number of Likert levels for these \code{vars}.
-#'     \item \code{skew}: numeric, passed to \code{\link{likertize_zscore}}. Here \code{skew}
-#'       is the skew-normal shape parameter used to define the reference density (\code{0} for symmetric).
+#'     \item \code{skew}: numeric, passed to \code{\link{likertize_zscore}}. Determines the
+#'       reference density shape (\code{0} = symmetric). Positive values concentrate data
+#'       in **lower** categories (right-skewed); negative values concentrate data in
+#'       **higher** categories (left-skewed).
 #'   }
 #'   Example:
 #'   \preformatted{
@@ -54,6 +56,7 @@
 #' head(out_ord)
 #'
 #' @seealso \code{\link{likertize_zscore}}, \code{\link{discretize_density}}
+#' @importFrom latent2likert discretize_density
 #' @export
 convert_to_likert_batch <- function(data, var_config, as_ordered = FALSE) {
 
