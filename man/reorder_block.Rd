@@ -2,19 +2,15 @@
 % Please edit documentation in R/reorder_block.R
 \name{reorder_block}
 \alias{reorder_block}
-\title{Reorder Data Blocks to Simulate Target Correlations}
+\title{Reorder Data Blocks in Place}
 \usage{
-reorder_block(data, anchor_cols, anchor_score, blocks, verbose = TRUE)
+reorder_block(data, anchor_score, blocks, verbose = TRUE)
 }
 \arguments{
 \item{data}{A data.frame containing the original data.}
 
-\item{anchor_cols}{A character vector of column names that form the "Anchor" block.
-These variables are sorted first and define the reference order.
-(e.g., demographics + independent variable items + total score).}
-
-\item{anchor_score}{A string specifying the column name within \code{anchor_cols}
-used to sort the anchor block.}
+\item{anchor_score}{A string specifying the column name used to sort the entire dataset.
+All columns NOT in `blocks` will move together based on this sort.}
 
 \item{blocks}{A named list of lists. Each sub-list defines a block to be reordered:
 \itemize{
@@ -23,61 +19,15 @@ used to sort the anchor block.}
   \item \code{rho}: Target correlation with the \code{anchor_score} (-1 to 1).
 }}
 
-\item{verbose}{Logical. If \code{TRUE}, prints validation checks.}
+\item{verbose}{Logical. If \code{TRUE}, prints progress messages.}
 }
 \value{
-A data.frame with shuffled rows where correlations match the targets.
+A data.frame with the same dimensions and column names as the input.
+        Rows are sorted by `anchor_score`, and `blocks` columns are shuffled.
 }
 \description{
-This function reorders blocks of variables (e.g., items + total score) to match
-a specified target correlation with an "Anchor" variable. It moves the entire
-block (items and scores) together to preserve internal consistency (Cronbach's alpha).
-}
-\examples{
-# --- 1. Create Mock Data ---
-set.seed(123)
-N <- 1000
-d <- data.frame(
-  # Continuous Items (x1-x3, m1-m3, y1-y3)
-  x1 = rnorm(N), x2 = rnorm(N), x3 = rnorm(N),
-  m1 = rnorm(N), m2 = rnorm(N), m3 = rnorm(N),
-  y1 = rnorm(N), y2 = rnorm(N), y3 = rnorm(N),
-
-  # Demographics / Categorical
-  gender = sample(c(0, 1), N, replace = TRUE),
-  grade  = sample(c("k1", "k2", "k3"), N, replace = TRUE)
-)
-
-# Calculate Total Scores
-d$x <- rowSums(d[, c("x1","x2","x3")])
-d$m <- rowSums(d[, c("m1","m2","m3")])
-d$y <- rowSums(d[, c("y1","y2","y3")])
-
-# --- 2. Define Configuration ---
-cols_anchor <- c("x1", "x2", "x3", "x", "gender", "grade")
-block_config <- list(
-  mediator_block = list(
-    cols  = c("m1", "m2", "m3", "m"),
-    score = "m",
-    rho   = 0.60
-  ),
-  outcome_block = list(
-    cols  = c("y1", "y2", "y3", "y"),
-    score = "y",
-    rho   = 0.30
-  )
-)
-
-# --- 3. Execute ---
-data_final <- reorder_block(
-  data = d,
-  anchor_cols = cols_anchor,
-  anchor_score = "x",
-  blocks = block_config,
-  verbose = TRUE
-)
-
-# --- 4. Verify ---
-# Check if correlations match the targets (approx 0.60 and 0.30)
-cor(data_final[, c("x", "m", "y")])
+This function sorts the entire dataset based on an `anchor_score`, keeping
+all row associations (IDs, unmentioned columns) intact. Then, for specific
+`blocks` of columns, it shuffles them independently to achieve a target
+correlation with the sorted anchor score.
 }
