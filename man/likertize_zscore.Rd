@@ -2,7 +2,7 @@
 % Please edit documentation in R/likertize_zscore.R
 \name{likertize_zscore}
 \alias{likertize_zscore}
-\title{Convert Z-scores to a Likert scale (skew-normal reference)}
+\title{Convert Z-scores to a Likert scale (Metric/Equidistant approach)}
 \usage{
 likertize_zscore(z_score, n_levels = 5, skew = 0)
 }
@@ -13,61 +13,59 @@ Missing values are preserved.}
 \item{n_levels}{Integer (>= 2). Number of Likert categories to create. Defaults to 5.}
 
 \item{skew}{Numeric. The skew-normal shape parameter \code{alpha} used to define the
-reference density. Use \code{0} for a symmetric normal reference.
+reference effective range. Use \code{0} for a symmetric normal reference.
 \itemize{
-  \item \strong{Positive skew (\code{skew > 0}):} Creates a right-skewed distribution
-    (long tail to the right). The probability mass concentrates in **lower** categories
-    (e.g., more 1s and 2s).
-  \item \strong{Negative skew (\code{skew < 0}):} Creates a left-skewed distribution
-    (long tail to the left). The probability mass concentrates in **higher** categories
-    (e.g., more 4s and 5s).
+  \item \strong{Positive skew (\code{skew > 0}):} shifts the range limits rightward.
+    Given standard normal data, this results in mass concentrating in **lower** categories.
+  \item \strong{Negative skew (\code{skew < 0}):} shifts the range limits leftward.
+    Given standard normal data, this results in mass concentrating in **higher** categories.
 }
-Practical guidance: \code{abs(skew) <= 3} often yields mild to moderate skew.
-Larger magnitudes may cause highly imbalanced categories (e.g., empty levels).}
+Practical guidance: \code{abs(skew) <= 3} often yields mild to moderate skew.}
 }
 \value{
-An integer vector with values in \code{1:n_levels}. If ordered-factor output is
-  desired, convert the result using \code{ordered()} outside this function.
+An integer vector with values in \code{1:n_levels}.
 }
 \description{
-Discretizes continuous Z-scores into \eqn{1..n\_levels} Likert categories so that
-the **marginal category proportions** follow a chosen reference density:
-\itemize{
-  \item standard normal when \code{skew = 0}
-  \item univariate skew-normal when \code{skew != 0}, where \code{skew} is the skew-normal
-        shape parameter \code{alpha}
-}
+Discretizes continuous Z-scores into \eqn{1..n\_levels} Likert categories by defining
+**equidistant intervals** over the effective range of a reference density.
 }
 \details{
-Internally, this function calls \code{discretize_density()} to compute endpoints that
-partition the real line into \code{n_levels} bins whose areas match the target density,
-then bins \code{z_score} using those endpoints.
+Unlike quantile-based discretization (which forces a uniform distribution), this
+"metric" approach partitions the underlying Z-scale into equal-width bins. Consequently:
+\itemize{
+  \item If the reference is standard normal (\code{skew = 0}), the resulting Likert
+    distribution will be bell-shaped (unimodal, symmetric).
+  \item If the reference is skew-normal (\code{skew != 0}), the intervals shift,
+    creating a skewed Likert distribution that mimics the reference shape.
+}
 
 
-- This function does not estimate any density from the data. It only uses the chosen
-  reference density (normal or skew-normal) to define proportional cutpoints, then bins
-  the provided \code{z_score}.
-- The helper \code{discretize_density(density_fn, n_levels, eps)} must exist in your
-  environment. It is expected to return a list with numeric vector \code{endp} of length
-  \code{n_levels + 1}, the endpoints on the Z-scale that define the category boundaries.
+\strong{Strategy: Cut the Metric, not the Density}
+
+Instead of finding cutpoints that integrate to specific probabilities (which yields
+uniform counts), this function:
+\enumerate{
+  \item Determines the "effective range" of the reference distribution (covering
+    the 0.1\% to 99.9\% quantiles).
+  \item Divides this numeric range into \code{n_levels} bins of equal width.
+  \item Maps the provided \code{z_score} into these bins.
+}
+This preserves the relative distances between data points, ensuring that central
+values remain in the central categories (bell-shaped) rather than being spread
+out to fill the tails.
 }
 \examples{
 set.seed(1)
 z <- rnorm(1000)
 
-# 5-point, symmetric reference
+# 1. Symmetric reference (skew = 0)
+# Result: Bell-shaped distribution (few 1s/5s, many 3s)
 x5 <- likertize_zscore(z, n_levels = 5, skew = 0)
-table(x5) / length(x5)
+barplot(table(x5), main = "Skew = 0 (Bell-shaped)")
 
-# 5-point, skew-normal reference (shape = 2)
+# 2. Positive skew reference (skew = 2)
+# Result: Right-skewed (Long tail right -> Mass on left/lower categories)
 x5_s2 <- likertize_zscore(z, n_levels = 5, skew = 2)
-table(x5_s2) / length(x5_s2)
+barplot(table(x5_s2), main = "Skew = 2 (Right-skewed)")
 
-# stronger skew (shape = 5), may yield imbalanced categories
-x5_s5 <- likertize_zscore(z, n_levels = 5, skew = 5)
-table(x5_s5) / length(x5_s5)
-
-}
-\seealso{
-discretize_density
 }

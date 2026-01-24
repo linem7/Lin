@@ -23,7 +23,7 @@ Example:
 \preformatted{
 var_config <- list(
   list(vars = c("z_a", "z_b"), n_levels = 5, skew = 0),
-  list(vars = "z_c",           n_levels = 7, skew = 2)
+  list(vars = "z_c",            n_levels = 7, skew = 2)
 )
 }}
 
@@ -38,8 +38,8 @@ A data frame of the same class as \code{data}, with the specified variables
 \description{
 Applies \code{\link{likertize_zscore}} across groups of variables in a data frame,
 using per-group settings for the number of Likert levels and optional skew.
-The function does not re-estimate densities from the data; it only uses the chosen
-reference density to define proportionally balanced cutpoints and then bins.
+The function does not re-estimate densities from the data; it uses the chosen
+reference density to define **equidistant cutpoints** over the effective range.
 }
 \details{
 - Variables listed in \code{var_config} that are not found in \code{data} trigger a warning and are skipped.
@@ -57,7 +57,7 @@ df <- data.frame(
 
 cfg <- list(
   list(vars = c("z_a", "z_b"), n_levels = 5, skew = 0),
-  list(vars = "z_c",           n_levels = 7, skew = 2)
+  list(vars = "z_c",            n_levels = 7, skew = 2)
 )
 
 out <- convert_to_likert_batch(df, cfg)
@@ -68,5 +68,5 @@ head(out_ord)
 
 }
 \seealso{
-\code{\link{likertize_zscore}}, \code{\link{discretize_density}}
+\code{\link{likertize_zscore}}
 }

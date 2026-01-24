@@ -2,8 +2,8 @@
 #'
 #' Applies \code{\link{likertize_zscore}} across groups of variables in a data frame,
 #' using per-group settings for the number of Likert levels and optional skew.
-#' The function does not re-estimate densities from the data; it only uses the chosen
-#' reference density to define proportionally balanced cutpoints and then bins.
+#' The function does not re-estimate densities from the data; it uses the chosen
+#' reference density to define **equidistant cutpoints** over the effective range.
 #'
 #' @param data A \code{data.frame} (or tibble) containing Z-score variables to be discretized.
 #'   Non-target columns are copied through unchanged.
@@ -20,7 +20,7 @@
 #'   \preformatted{
 #'   var_config <- list(
 #'     list(vars = c("z_a", "z_b"), n_levels = 5, skew = 0),
-#'     list(vars = "z_c",           n_levels = 7, skew = 2)
+#'     list(vars = "z_c",            n_levels = 7, skew = 2)
 #'   )
 #'   }
 #' @param as_ordered Logical. If \code{TRUE}, converts the resulting integer categories to
@@ -46,7 +46,7 @@
 #'
 #' cfg <- list(
 #'   list(vars = c("z_a", "z_b"), n_levels = 5, skew = 0),
-#'   list(vars = "z_c",           n_levels = 7, skew = 2)
+#'   list(vars = "z_c",            n_levels = 7, skew = 2)
 #' )
 #'
 #' out <- convert_to_likert_batch(df, cfg)
@@ -55,8 +55,7 @@
 #' out_ord <- convert_to_likert_batch(df, cfg, as_ordered = TRUE)
 #' head(out_ord)
 #'
-#' @seealso \code{\link{likertize_zscore}}, \code{\link{discretize_density}}
-#' @importFrom latent2likert discretize_density
+#' @seealso \code{\link{likertize_zscore}}
 #' @export
 convert_to_likert_batch <- function(data, var_config, as_ordered = FALSE) {
 
@@ -71,9 +70,10 @@ convert_to_likert_batch <- function(data, var_config, as_ordered = FALSE) {
   }
 
   data_likert <- data
-  all_vars <- character(0)
 
-  # record the final n_levels per variable (last occurrence wins)
+  # Tracks variables encountered to handle order/factor levels later
+  processed_vars <- character(0)
+  # Record the final n_levels per variable (last occurrence wins logic)
   var_levels <- integer(0)
 
   for (i in seq_along(var_config)) {
@@ -89,9 +89,9 @@ convert_to_likert_batch <- function(data, var_config, as_ordered = FALSE) {
       ))
     }
 
-    vars     <- config$vars
-    n_levels <- config$n_levels
-    skew     <- config$skew
+    vars      <- config$vars
+    n_levels  <- config$n_levels
+    skew      <- config$skew
 
     if (!is.character(vars) || length(vars) == 0L) {
       stop(sprintf("`vars` must be a non-empty character vector (config index %d).", i))
@@ -107,27 +107,29 @@ convert_to_likert_batch <- function(data, var_config, as_ordered = FALSE) {
 
     for (var in vars) {
       if (var %in% names(data)) {
+        # Perform the conversion
         data_likert[[var]] <- likertize_zscore(
           z_score  = data[[var]],
           n_levels = n_levels,
           skew     = skew
         )
+        # Track metadata for this variable
         var_levels[[var]] <- n_levels
+        processed_vars <- unique(c(processed_vars, var))
       } else {
         warning(sprintf("Variable '%s' not found in `data`; skipping.", var))
       }
     }
-
-    all_vars <- c(all_vars, vars)
   }
 
   if (isTRUE(as_ordered)) {
-    unique_vars <- unique(all_vars)
-    for (var in unique_vars) {
+    for (var in processed_vars) {
+      # Safety check: ensure the variable is still in the data and we recorded its levels
       if (var %in% names(data_likert)) {
         nl <- var_levels[[var]]
-        if (is.null(nl) || !is.finite(nl) || nl < 2) next
-        data_likert[[var]] <- ordered(data_likert[[var]], levels = seq_len(nl))
+        if (!is.null(nl) && is.finite(nl) && nl >= 2) {
+          data_likert[[var]] <- ordered(data_likert[[var]], levels = seq_len(nl))
+        }
       }
     }
   }
