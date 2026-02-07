@@ -67,64 +67,58 @@ format_column_name <- function(x) {
   }
 }
 
-#' Compare Multiple Lavaan Models with Publication-Ready Fit Statistics
+#' Compare Multiple CFA Models with Publication-Ready Fit Statistics
 #'
-#' Creates a comprehensive comparison table for multiple lavaan model objects,
-#' automatically selecting the most appropriate fit indices based on each model's
-#' estimator family and providing publication-ready formatting with change statistics.
+#' Fits one or more CFA models using \code{lavaan::cfa()} and returns a comparison
+#' table of common fit indices with publication-oriented formatting. Change statistics
+#' (Δ columns) are computed relative to the first model.
 #'
-#' @param ... Lavaan model objects (from \code{cfa()}, \code{sem()}, etc.) to compare,
-#'   or a single list containing multiple lavaan model objects
+#' @param ... Lavaan model syntax strings (character). You can pass multiple model
+#'   strings directly, or a single list of model strings.
+#' @param data A data.frame used to fit all models via \code{lavaan::cfa()}.
+#' @param fit_args A list of additional arguments passed to \code{lavaan::cfa()},
+#'   such as \code{estimator}，\code{missing}，\code{std.lv}，\code{ordered}，\code{meanstructure}.
+#'   Default is \code{list()}.
 #' @param model_names Character vector of names for the models. If \code{NULL},
-#'   defaults to "Model 1", "Model 2", etc. Must match the number of models provided
+#'   defaults to "Model 1", "Model 2", etc. Must match the number of models provided.
 #' @param indices Character vector specifying which fit indices to include.
-#'   Available options: "chisq", "df", "cfi", "tli", "rmsea", "srmr", "aic", "bic",
-#'   "nnfi", "gfi", "agfi". Default: \code{c("chisq","df","cfi","tli","rmsea","srmr")}
+#'   Common options include "chisq", "df", "cfi", "tli", "rmsea", "srmr", "aic", "bic".
+#'   Default: \code{c("chisq","df","cfi","tli","rmsea","srmr")}.
 #' @param changes Character vector specifying which indices to calculate change scores
-#'   for (Δ columns) relative to the first model. Default: \code{c("cfi","rmsea")}
-#' @param digits Integer specifying number of decimal places for rounding and display.
-#'   Default: 3. Chi-square and chi-square/df values use fixed decimal formatting
-#' @param show_estimator_info Logical indicating whether to display detailed estimator
-#'   information in console summary. Default: \code{FALSE}
+#'   for (Δ columns) relative to the first model. Default: \code{c("cfi","rmsea")}.
+#' @param digits Integer specifying the number of decimal places for rounding and display.
+#'   Default: 3. \eqn{\chi^2} and \eqn{\chi^2/df} are formatted with fixed decimal places.
+#' @param show_estimator_info Logical indicating whether to include an "Estimator" column
+#'   in the output table. Default: \code{FALSE}.
+#' @param show_summary Logical indicating whether to print a concise console summary of
+#'   change statistics. Default: \code{FALSE}.
 #'
-#' @return A data.frame with model comparison results including:
+#' @return A data.frame containing model comparison results, including:
 #' \itemize{
-#'   \item Model names and estimator information
-#'   \item Selected fit indices with appropriate scaling (standard/robust/scaled)
-#'   \item Chi-square to degrees of freedom ratio (χ²/df) when both chisq and df are included
-#'   \item Change scores (Δ) relative to the first model for specified indices
+#'   \item Model names (and optional estimator column)
+#'   \item Requested fit indices
+#'   \item \eqn{\chi^2/df} when both "chisq" and "df" are available
+#'   \item Δ columns for indices listed in \code{changes}, relative to the first model
 #' }
 #'
-#' The returned object includes attributes containing metadata about which specific
-#' index versions were used for each model.
+#' The returned object includes attributes:
+#' \itemize{
+#'   \item \code{measure_names_used}: the exact fitmeasures names used for each model
+#'   \item \code{estimator_families}: estimator family labels for each fitted model
+#'   \item \code{fit_args}: the \code{fit_args} list actually used
+#'   \item \code{fits}: the fitted lavaan objects (named by \code{model_names})
+#' }
 #'
 #' @details
-#' \strong{Estimator Family Detection:}
-#' The function automatically detects estimator families and selects appropriate indices:
-#' \itemize{
-#'   \item \strong{Scaled family} (WLSM, WLSMV, DWLS, ULS, ULSM, ULSMV, MLM, MLMV):
-#'         Prefers .scaled → .robust → standard versions
-#'   \item \strong{Robust family} (MLR): Prefers .robust → .scaled → standard versions
-#'   \item \strong{Standard family} (ML, etc.): Prefers standard → .scaled → .robust versions
-#' }
-#'
-#' \strong{Special Formatting:}
-#' Chi-square (χ²) and chi-square/df (χ²/df) values are formatted as character strings
-#' with fixed decimal places to ensure consistent display regardless of magnitude.
-#' Other indices remain numeric for further calculations.
-#'
-#' \strong{Change Interpretation:}
-#' \itemize{
-#'   \item For CFI/TLI/NNFI/GFI/AGFI: Positive changes indicate improvement
-#'   \item For RMSEA/SRMR: Negative changes indicate improvement
-#'   \item For AIC/BIC: Negative changes indicate improvement
-#'   \item For chi-square: Negative changes indicate improvement (better fit)
-#' }
+#' All input models are fitted inside the function using \code{lavaan::cfa()} with the
+#' same \code{data} and \code{fit_args}. Fit indices are extracted via
+#' \code{lavaan::fitmeasures()} and arranged into a single comparison table. When
+#' multiple models are provided, Δ columns are computed as the difference between each
+#' model and the first model for the indices listed in \code{changes}.
 #'
 #' @examples
 #' library(lavaan)
 #'
-#' # Define CFA models
 #' model_1f <- 'general =~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9'
 #' model_3f <- '
 #'   visual  =~ x1 + x2 + x3
@@ -132,92 +126,89 @@ format_column_name <- function(x) {
 #'   speed   =~ x7 + x8 + x9
 #' '
 #'
-#' # Fit models
-#' fit_1f <- cfa(model_1f, data = HolzingerSwineford1939)
-#' fit_3f <- cfa(model_3f, data = HolzingerSwineford1939)
-#'
-#' # Basic comparison
 #' comparison <- fit_table_lavaan(
-#'   fit_1f, fit_3f,
+#'   model_1f, model_3f,
+#'   data = HolzingerSwineford1939,
 #'   model_names = c("One Factor", "Three Factors"),
+#'   fit_args = list(estimator = "MLR", missing = "fiml"),
 #'   digits = 3
 #' )
 #' print(comparison)
 #'
-#' # Different change indice
-#' comparison <- fit_table_lavaan(
-#'   fit_1f, fit_3f,
-#'   model_names = c("One Factor", "Three Factors"),
-#'   digits = 3,
-#'   changes = "srmr"
-#' )
-#' print(comparison)
-#'
-#' # Show detailed index selection
-#' show_measure_details(comparison)
-#'
-#' @seealso \code{\link{show_measure_details}} for detailed index selection information
-#' @importFrom lavaan fitmeasures lavInspect
+#' @seealso \code{\link{show_measure_details}} for detailed index selection information.
+#' @importFrom lavaan cfa fitmeasures lavInspect
 #' @importFrom dplyr bind_rows
 #' @export
 fit_table_lavaan <- function(...,
-                             model_names     = NULL,
-                             indices         = c("chisq","df","cfi","tli","rmsea","srmr"),
-                             changes         = c("cfi","rmsea"),
-                             digits          = 3,
+                             data               = NULL,
+                             fit_args           = list(),
+                             model_names        = NULL,
+                             indices            = c("chisq","df","cfi","tli","rmsea","srmr"),
+                             changes            = c("cfi","rmsea"),
+                             digits             = 3,
                              show_estimator_info = FALSE,
-                             show_summary    = FALSE) {
-  # capture models
+                             show_summary       = FALSE) {
+
   models <- list(...)
-  if (length(models)==1 &&
-      is.list(models[[1]]) &&
-      all(sapply(models[[1]], inherits, "lavaan"))) {
+
+  if (length(models) == 1 && is.list(models[[1]]) && !is.character(models[[1]])) {
     models <- models[[1]]
   }
-  if (length(models)==0) {
-    stop("Provide at least one lavaan model object.")
-  }
-  if (!all(sapply(models, inherits, "lavaan"))) {
-    stop("All inputs must be lavaan model fits (cfa(), sem(), etc.).")
-  }
-  # model names
+
+  if (length(models) == 0) stop("Provide at least one lavaan model syntax (character).")
+  if (!all(sapply(models, is.character))) stop("All inputs must be lavaan model syntax strings (character).")
+  if (is.null(data)) stop("`data` must be provided for fitting via lavaan::cfa().")
+
   if (is.null(model_names)) {
     model_names <- paste("Model", seq_along(models))
   } else if (length(model_names) != length(models)) {
     stop("`model_names` must match the number of models.")
   }
-  # ensure we have chisq & df for χ²/df
+
+  # fit inside (always cfa)
+  fits <- vector("list", length(models))
+  for (i in seq_along(models)) {
+    spec <- models[[i]]
+    if (length(spec) > 1) spec <- paste(spec, collapse = "\n")
+
+    args <- c(list(model = spec, data = data), fit_args)
+
+    fits[[i]] <- tryCatch(
+      do.call(lavaan::cfa, args),
+      error = function(e) {
+        stop(sprintf("Model fitting failed for %s: %s", model_names[i], e$message), call. = FALSE)
+      }
+    )
+  }
+
   all_idx <- unique(c(indices, "chisq","df"))
 
-  results       <- vector("list", length(models))
-  used_meas     <- vector("list", length(models))
-  est_info      <- character(length(models))
+  results   <- vector("list", length(fits))
+  used_meas <- vector("list", length(fits))
+  est_info  <- character(length(fits))
 
-  for (i in seq_along(models)) {
-    mod      <- models[[i]]
-    est      <- lavInspect(mod, "options")$estimator
+  for (i in seq_along(fits)) {
+    mod         <- fits[[i]]
+    est         <- lavInspect(mod, "options")$estimator
     est_info[i] <- est
-    family   <- get_estimator_family(mod)
-    meas     <- fitmeasures(mod)
+    family      <- get_estimator_family(mod)
+    meas        <- fitmeasures(mod)
 
-    # collect requested measures
     row        <- list()
-    used_names <- character(length(all_idx)+1)
-    names(used_names) <- c(all_idx,"chisq_df")
+    used_names <- character(length(all_idx) + 1)
+    names(used_names) <- c(all_idx, "chisq_df")
 
     for (nm in all_idx) {
       res <- get_best_measure(meas, nm, family)
-      row[[nm]]        <- res$value
-      used_names[nm]   <- res$used
+      row[[nm]]      <- res$value
+      used_names[nm] <- res$used
     }
-    # compute χ²/df
-    if (!is.na(row$chisq) && !is.na(row$df) && row$df>0) {
-      row$chisq_df       <- row$chisq / row$df
-      used_names["chisq_df"] <- paste0(
-        used_names["chisq"],"/",used_names["df"]
-      )
+
+    if (!is.na(row$chisq) && !is.na(row$df) && row$df > 0) {
+      row$chisq_df <- row$chisq / row$df
+      used_names["chisq_df"] <- paste0(used_names["chisq"], "/", used_names["df"])
     } else {
-      row$chisq_df       <- NA_real_
+      row$chisq_df <- NA_real_
       used_names["chisq_df"] <- NA_character_
     }
 
@@ -225,38 +216,30 @@ fit_table_lavaan <- function(...,
     used_meas[[i]] <- used_names
   }
 
-  # build data.frame
-  fit_df <- bind_rows(results)
-  fit_df$Model     <- model_names
-  if (show_estimator_info) {
-    fit_df$Estimator <- est_info
-  }
+  fit_df <- dplyr::bind_rows(results)
+  fit_df$Model <- model_names
+  if (show_estimator_info) fit_df$Estimator <- est_info
 
-  #  ─── order columns: Model, Estimator, chisq, df, chisq_df, <others> ─────
   final_raw <- indices
   if (all(c("chisq","df") %in% indices)) {
-    df_pos <- which(indices=="df")
+    df_pos <- which(indices == "df")
     final_raw <- append(indices, values = "chisq_df", after = df_pos)
   } else {
     final_raw <- unique(c(indices, "chisq_df"))
   }
 
   cols <- c("Model", final_raw)
-  if (show_estimator_info) {
-    cols <- append("Model", c("Estimator", final_raw))
-  }
-  fit_df <- fit_df[, cols]
+  if (show_estimator_info) cols <- c("Model", "Estimator", final_raw)
+  fit_df <- fit_df[, cols, drop = FALSE]
 
-  # rename to publication‐style
-  new_names <- sapply(names(fit_df), function(x) {
+  new_names <- vapply(names(fit_df), function(x) {
     if (x %in% c("Model","Estimator")) return(x)
-    if (x=="chisq_df")       return("χ²/df")
+    if (x == "chisq_df") return("χ²/df")
     format_column_name(x)
-  }, USE.NAMES=FALSE)
+  }, FUN.VALUE = character(1))
   names(fit_df) <- new_names
 
-  #  ─── add Δ‐columns ─────────────────────────────────────────────────────
-  if (nrow(fit_df)>1) {
+  if (nrow(fit_df) > 1) {
     for (m in changes) {
       fm  <- format_column_name(m)
       col <- paste0("Δ", fm)
@@ -267,13 +250,9 @@ fit_table_lavaan <- function(...,
     }
   }
 
-  #  ─── SINGLE COMPREHENSIVE ROUNDING AND DISPLAY FORMATTING ───────────────
-  # Round all numeric columns first
-  is_num <- sapply(fit_df, is.numeric)
+  is_num <- vapply(fit_df, is.numeric, logical(1))
   fit_df[is_num] <- lapply(fit_df[is_num], function(x) round(x, digits))
 
-  # Format χ² and χ²/df with fixed decimal places for proper display
-  # This ensures tibble printing shows exactly `digits` decimal places
   fmt_fixed <- function(x) {
     if (all(is.na(x))) return(x)
     sprintf(paste0("%.", digits, "f"), x)
@@ -285,27 +264,25 @@ fit_table_lavaan <- function(...,
   if ("χ²/df" %in% names(fit_df)) {
     fit_df[["χ²/df"]] <- fmt_fixed(as.numeric(fit_df[["χ²/df"]]))
   }
-
-  # Keep df as integer for cleaner display
   if ("df" %in% names(fit_df)) {
     fit_df[["df"]] <- as.integer(round(as.numeric(fit_df[["df"]]), 0))
   }
 
-  # store metadata
-  attr(fit_df, "measure_names_used") <- setNames(used_meas, model_names)
-  attr(fit_df, "estimator_families") <- sapply(models, get_estimator_family)
+  attr(fit_df, "measure_names_used") <- stats::setNames(used_meas, model_names)
+  attr(fit_df, "estimator_families") <- vapply(fits, get_estimator_family, character(1))
   attr(fit_df, "original_indices")   <- indices
   attr(fit_df, "original_changes")   <- changes
+  attr(fit_df, "fit_args")           <- fit_args
+  attr(fit_df, "fits")               <- stats::setNames(fits, model_names)
 
-  #  ─── print concise summary ──────────────────────────────────────────────
-  if (show_summary && nrow(fit_df) > 1) {  # <— gated by show_summary
+  if (show_summary && nrow(fit_df) > 1) {
     cat("=== MODEL COMPARISON SUMMARY ===\n")
     cat(sprintf("(Changes relative to %s)\n\n", model_names[1]))
 
-    if (show_estimator_info) {  # <— still works inside the summary
+    if (show_estimator_info) {
       cats <- paste0(
         "- ", model_names, ": ", est_info,
-        " (", attr(fit_df,"estimator_families"), ")\n"
+        " (", attr(fit_df, "estimator_families"), ")\n"
       )
       cat("Estimator info:\n", paste(cats, collapse=""), "\n")
     }
@@ -329,8 +306,9 @@ fit_table_lavaan <- function(...,
     }
   }
 
-  return(fit_df)
+  fit_df
 }
+
 
 #' Display Detailed Information About Fit Index Selection
 #'

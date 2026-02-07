@@ -2,10 +2,12 @@
 % Please edit documentation in R/fit_table_lavaan.R
 \name{fit_table_lavaan}
 \alias{fit_table_lavaan}
-\title{Compare Multiple Lavaan Models with Publication-Ready Fit Statistics}
+\title{Compare Multiple CFA Models with Publication-Ready Fit Statistics}
 \usage{
 fit_table_lavaan(
   ...,
+  data = NULL,
+  fit_args = list(),
   model_names = NULL,
   indices = c("chisq", "df", "cfi", "tli", "rmsea", "srmr"),
   changes = c("cfi", "rmsea"),
@@ -15,69 +17,66 @@ fit_table_lavaan(
 )
 }
 \arguments{
-\item{...}{Lavaan model objects (from \code{cfa()}, \code{sem()}, etc.) to compare,
-or a single list containing multiple lavaan model objects}
+\item{...}{Lavaan model syntax strings (character). You can pass multiple model
+strings directly, or a single list of model strings.}
+
+\item{data}{A data.frame used to fit all models via \code{lavaan::cfa()}.}
+
+\item{fit_args}{A list of additional arguments passed to \code{lavaan::cfa()},
+such as \code{estimator}，\code{missing}，\code{std.lv}，\code{ordered}，\code{meanstructure}.
+Default is \code{list()}.}
 
 \item{model_names}{Character vector of names for the models. If \code{NULL},
-defaults to "Model 1", "Model 2", etc. Must match the number of models provided}
+defaults to "Model 1", "Model 2", etc. Must match the number of models provided.}
 
 \item{indices}{Character vector specifying which fit indices to include.
-Available options: "chisq", "df", "cfi", "tli", "rmsea", "srmr", "aic", "bic",
-"nnfi", "gfi", "agfi". Default: \code{c("chisq","df","cfi","tli","rmsea","srmr")}}
+Common options include "chisq", "df", "cfi", "tli", "rmsea", "srmr", "aic", "bic".
+Default: \code{c("chisq","df","cfi","tli","rmsea","srmr")}.}
 
 \item{changes}{Character vector specifying which indices to calculate change scores
-for (Δ columns) relative to the first model. Default: \code{c("cfi","rmsea")}}
+for (Δ columns) relative to the first model. Default: \code{c("cfi","rmsea")}.}
 
-\item{digits}{Integer specifying number of decimal places for rounding and display.
-Default: 3. Chi-square and chi-square/df values use fixed decimal formatting}
+\item{digits}{Integer specifying the number of decimal places for rounding and display.
+Default: 3. \eqn{\chi^2} and \eqn{\chi^2/df} are formatted with fixed decimal places.}
 
-\item{show_estimator_info}{Logical indicating whether to display detailed estimator
-information in console summary. Default: \code{FALSE}}
+\item{show_estimator_info}{Logical indicating whether to include an "Estimator" column
+in the output table. Default: \code{FALSE}.}
+
+\item{show_summary}{Logical indicating whether to print a concise console summary of
+change statistics. Default: \code{FALSE}.}
 }
 \value{
-A data.frame with model comparison results including:
+A data.frame containing model comparison results, including:
 \itemize{
-  \item Model names and estimator information
-  \item Selected fit indices with appropriate scaling (standard/robust/scaled)
-  \item Chi-square to degrees of freedom ratio (χ²/df) when both chisq and df are included
-  \item Change scores (Δ) relative to the first model for specified indices
+  \item Model names (and optional estimator column)
+  \item Requested fit indices
+  \item \eqn{\chi^2/df} when both "chisq" and "df" are available
+  \item Δ columns for indices listed in \code{changes}, relative to the first model
 }
 
-The returned object includes attributes containing metadata about which specific
-index versions were used for each model.
+The returned object includes attributes:
+\itemize{
+  \item \code{measure_names_used}: the exact fitmeasures names used for each model
+  \item \code{estimator_families}: estimator family labels for each fitted model
+  \item \code{fit_args}: the \code{fit_args} list actually used
+  \item \code{fits}: the fitted lavaan objects (named by \code{model_names})
+}
 }
 \description{
-Creates a comprehensive comparison table for multiple lavaan model objects,
-automatically selecting the most appropriate fit indices based on each model's
-estimator family and providing publication-ready formatting with change statistics.
+Fits one or more CFA models using \code{lavaan::cfa()} and returns a comparison
+table of common fit indices with publication-oriented formatting. Change statistics
+(Δ columns) are computed relative to the first model.
 }
 \details{
-\strong{Estimator Family Detection:}
-The function automatically detects estimator families and selects appropriate indices:
-\itemize{
-  \item \strong{Scaled family} (WLSM, WLSMV, DWLS, ULS, ULSM, ULSMV, MLM, MLMV):
-        Prefers .scaled → .robust → standard versions
-  \item \strong{Robust family} (MLR): Prefers .robust → .scaled → standard versions
-  \item \strong{Standard family} (ML, etc.): Prefers standard → .scaled → .robust versions
-}
-
-\strong{Special Formatting:}
-Chi-square (χ²) and chi-square/df (χ²/df) values are formatted as character strings
-with fixed decimal places to ensure consistent display regardless of magnitude.
-Other indices remain numeric for further calculations.
-
-\strong{Change Interpretation:}
-\itemize{
-  \item For CFI/TLI/NNFI/GFI/AGFI: Positive changes indicate improvement
-  \item For RMSEA/SRMR: Negative changes indicate improvement
-  \item For AIC/BIC: Negative changes indicate improvement
-  \item For chi-square: Negative changes indicate improvement (better fit)
-}
+All input models are fitted inside the function using \code{lavaan::cfa()} with the
+same \code{data} and \code{fit_args}. Fit indices are extracted via
+\code{lavaan::fitmeasures()} and arranged into a single comparison table. When
+multiple models are provided, Δ columns are computed as the difference between each
+model and the first model for the indices listed in \code{changes}.
 }
 \examples{
 library(lavaan)
 
-# Define CFA models
 model_1f <- 'general =~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9'
 model_3f <- '
   visual  =~ x1 + x2 + x3
@@ -85,31 +84,16 @@ model_3f <- '
   speed   =~ x7 + x8 + x9
 '
 
-# Fit models
-fit_1f <- cfa(model_1f, data = HolzingerSwineford1939)
-fit_3f <- cfa(model_3f, data = HolzingerSwineford1939)
-
-# Basic comparison
 comparison <- fit_table_lavaan(
-  fit_1f, fit_3f,
+  model_1f, model_3f,
+  data = HolzingerSwineford1939,
   model_names = c("One Factor", "Three Factors"),
+  fit_args = list(estimator = "MLR", missing = "fiml"),
   digits = 3
 )
 print(comparison)
 
-# Different change indice
-comparison <- fit_table_lavaan(
-  fit_1f, fit_3f,
-  model_names = c("One Factor", "Three Factors"),
-  digits = 3,
-  changes = "srmr"
-)
-print(comparison)
-
-# Show detailed index selection
-show_measure_details(comparison)
-
 }
 \seealso{
-\code{\link{show_measure_details}} for detailed index selection information
+\code{\link{show_measure_details}} for detailed index selection information.
 }
