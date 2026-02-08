@@ -31,3 +31,47 @@ all row associations (IDs, unmentioned columns) intact. Then, for specific
 `blocks` of columns, it shuffles them independently to achieve a target
 correlation with the sorted anchor score.
 }
+\examples{
+set.seed(42)
+n <- 300
+
+# Demographic/reference columns (kept aligned as a unit after anchor sorting)
+dat <- data.frame(
+  id     = sprintf("S\%03d", 1:n),
+  gender = sample(c("M", "F"), n, replace = TRUE),
+  age    = sample(18:35, n, replace = TRUE)
+)
+
+# Anchor block (moves the whole dataset via sorting, but demographics stay aligned)
+dat$x  <- rnorm(n)
+dat$x1 <- dat$x + rnorm(n, sd = 0.7)
+dat$x2 <- dat$x + rnorm(n, sd = 0.7)
+dat$x3 <- dat$x + rnorm(n, sd = 0.7)
+
+# Blocks to be moved as a pair (m-block and y-block move together)
+# Build m and y to be initially related to x, then we will reshuffle them.
+dat$m  <- 0.6 * dat$x + rnorm(n, sd = 0.8)
+dat$m1 <- dat$m + rnorm(n, sd = 0.6)
+dat$m2 <- dat$m + rnorm(n, sd = 0.6)
+dat$m3 <- dat$m + rnorm(n, sd = 0.6)
+
+dat$y  <- 0.5 * dat$m + rnorm(n, sd = 0.9)
+dat$y1 <- dat$y + rnorm(n, sd = 0.6)
+dat$y2 <- dat$y + rnorm(n, sd = 0.6)
+dat$y3 <- dat$y + rnorm(n, sd = 0.6)
+
+# Reshuffle the combined (m + y) block to target correlation with sorted x
+out <- reorder_block(
+  data         = dat,
+  anchor_score = "x",
+  blocks = list(
+    my_block = list(
+      cols  = c("m", "m1", "m2", "m3", "y", "y1", "y2", "y3"),
+      score = "m",
+      rho   = 0.20
+    )
+  ),
+  verbose = FALSE
+)
+
+}
