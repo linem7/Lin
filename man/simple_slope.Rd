@@ -12,81 +12,184 @@ simple_slope(
   y,
   slp_l,
   slp_h,
-  mean_x = 0,
-  mean_w = 0,
+  mean_x = NULL,
+  mean_w = NULL,
+  var_x = NULL,
+  var_w = NULL,
   legend_position = "right",
   legend_name = "Moderator Level",
-  fontsize = 14
+  fontsize = 14,
+  return_data = FALSE
 )
 }
 \arguments{
-\item{model}{An MplusAutomation model object containing parameters (typically output from `readModels()`).}
+\item{model}{An MplusAutomation model object (typically output from
+\code{MplusAutomation::readModels()}).}
 
-\item{x}{Name of the independent variable in Mplus output.}
+\item{x}{Character string. Name of the independent variable (predictor) as it appears
+in the Mplus output. Case-insensitive.}
 
-\item{w}{Name of the moderator variable.}
+\item{w}{Character string. Name of the moderator variable as it appears in the Mplus
+output. Case-insensitive.}
 
-\item{int}{Name of the interaction term (x*w).}
+\item{int}{Character string. Name of the interaction term (x*w) as it appears in the
+Mplus output. For observed variable models, this is typically created using
+\code{DEFINE: int = x * w;} in the Mplus input. For latent variable models, this is
+defined using \code{int | x XWITH w;} in the MODEL command. Case-insensitive.}
 
-\item{y}{Name of the dependent variable.}
+\item{y}{Character string. Name of the dependent variable as it appears in the Mplus
+output. Can be observed or latent. Case-insensitive.}
 
-\item{slp_l}{Name of the parameter for the simple slope at low moderator value under model constraint (M - 1SD).}
+\item{slp_l}{Character string. Name of the parameter for the simple slope at the low
+moderator level (M - 1SD), defined under \code{MODEL CONSTRAINT} in the Mplus input.
+Case-insensitive.}
 
-\item{slp_h}{Name of the parameter for the simple slope at high moderator value  under model constraint (M + 1SD).}
+\item{slp_h}{Character string. Name of the parameter for the simple slope at the high
+moderator level (M + 1SD), defined under \code{MODEL CONSTRAINT} in the Mplus input.
+Case-insensitive.}
 
-\item{mean_x}{Mean value of the independent variable (default = 0).}
+\item{mean_x}{Numeric or \code{NULL}. Mean of the independent variable. If \code{NULL}
+(default), the function attempts to extract it from the sample statistics for observed
+variables, or defaults to 0 for latent variables.}
 
-\item{mean_w}{Mean value of the moderator (default = 0).}
+\item{mean_w}{Numeric or \code{NULL}. Mean of the moderator variable. Same extraction
+logic as \code{mean_x}.}
 
-\item{legend_position}{Position of the legend. Options are:
+\item{var_x}{Numeric or \code{NULL}. Variance of the independent variable. If \code{NULL}
+(default), the function attempts to extract it from the sample statistics for observed
+variables, or from the model parameter estimates (Variances section) for latent variables.}
+
+\item{var_w}{Numeric or \code{NULL}. Variance of the moderator variable. Same extraction
+logic as \code{var_x}.}
+
+\item{legend_position}{Character string. Position of the legend. Options are:
 \itemize{
-  \item `"UL"` = Upper Left inside plot,
-  \item `"UR"` = Upper Right inside plot,
-  \item `"BL"` = Bottom Left inside plot,
-  \item `"BR"` = Bottom Right inside plot,
-  \item `"right"` = Default, outside plot on right side.
+  \item \code{"UL"}: Upper Left inside plot
+  \item \code{"UR"}: Upper Right inside plot
+  \item \code{"BL"}: Bottom Left inside plot
+  \item \code{"BR"}: Bottom Right inside plot
+  \item \code{"right"}: Default, outside plot on the right side
 }}
 
-\item{legend_name}{The name of legend.}
+\item{legend_name}{Character string. Title displayed above the legend entries.
+Default is \code{"Moderator Level"}.}
 
-\item{fontsize}{Font size for the plot text (default = 14).}
+\item{fontsize}{Numeric. Base font size for the plot text. Default is 14.}
+
+\item{return_data}{Logical. If \code{TRUE}, return the data frame used for plotting
+instead of the ggplot object. The returned data frame contains columns \code{x},
+\code{w}, and \code{y}. Default is \code{FALSE}.}
 }
 \value{
-A ggplot2 object displaying the simple slope plot.
+If \code{return_data = FALSE} (default), a \code{ggplot2} object displaying the
+  simple slope plot with three lines representing the moderator at M - 1SD, Mean, and
+  M + 1SD. Each legend entry is annotated with the corresponding slope estimate,
+  standard error, and p-value.
+
+  If \code{return_data = TRUE}, a data frame with three columns:
+  \describe{
+    \item{x}{Values of the independent variable (mean - 1SD and mean + 1SD).}
+    \item{w}{Values of the moderator (mean + 1SD, mean, and mean - 1SD).}
+    \item{y}{Predicted values of the dependent variable.}
+  }
 }
 \description{
 This function extracts model parameters from an MplusAutomation object and creates
 a simple slope plot for a moderated regression model:
 }
 \details{
-\deqn{y = b0 + b1*x + b2*w + b3*(x*w) + \varepsilon}
+\deqn{y = b_0 + b_1 x + b_2 w + b_3 (x \times w) + \varepsilon}
 
-It automatically retrieves regression coefficients, variances, and simple slopes
+It automatically retrieves regression coefficients, means, variances, and simple slopes
 at different moderator levels (mean, mean - 1SD, mean + 1SD), and generates a plot
 with annotated legend entries showing the slope estimates, standard errors, and p-values.
 
+The function supports both observed variable models (path analysis) and latent variable
+models (SEM with latent interactions). It determines whether the predictor and moderator
+are observed or latent by checking the sample statistics. For observed variables, means
+and variances are extracted from sample statistics. For latent variables, means default
+to 0 (as is standard in Mplus), and variances are extracted from the model parameter
+estimates.
 
-The function extracts:
-\itemize{
-  \item The intercept from the \code{Intercepts} section.
-  \item The coefficients for the independent variable (x), moderator (w), and interaction (x*w) from the \code{y.ON} section.
-  \item The variances of x and w from the \code{Variances} section.
-  \item The simple slopes at M - 1SD and M + 1SD from the \code{New.Additional.Parameters} section.
+
+The function performs the following steps:
+
+\strong{1. Coefficient extraction}
+
+The intercept of \code{y} is extracted from the \code{Intercepts} section. The
+regression coefficients for \code{x}, \code{w}, and \code{int} are extracted from
+the \code{y.ON} section of the unstandardized parameter estimates.
+
+\strong{2. Mean and variance extraction}
+
+When \code{mean_x}, \code{mean_w}, \code{var_x}, or \code{var_w} are left as
+\code{NULL}, the function first checks whether the variable appears in
+\code{model[["sampstat"]][["univariate.sample.statistics"]]}. If found, the variable
+is treated as observed and its sample mean and variance are used. If not found, the
+variable is treated as latent: its mean is set to 0 and its variance is read from
+the \code{Variances} section of the model parameter estimates. Users can override
+any of these values by passing explicit numeric arguments.
+
+\strong{3. Simple slope annotation}
+
+The simple slopes at M - 1SD and M + 1SD are retrieved from the
+\code{New.Additional.Parameters} section. The simple slope at the mean is taken
+from the main effect of \code{x}. These estimates, along with their standard errors
+and p-values, are displayed in the legend. P-values are formatted without a leading
+zero (e.g., \code{p = .057}).
+
+\strong{4. Plotting}
+
+Predicted values of \code{y} are computed at two levels of \code{x} (mean - 1SD and
+mean + 1SD) crossed with three levels of \code{w} (mean - 1SD, mean, mean + 1SD),
+producing six data points and three regression lines.
+
+\strong{Mplus input requirements}
+
+The Mplus input file should include \code{OUTPUT: SAMPSTAT;} so that sample statistics
+are available for observed variable models. Simple slopes must be defined under
+\code{MODEL CONSTRAINT} using the \code{NEW} statement. For example:
+
+\preformatted{
+MODEL CONSTRAINT:
+  NEW(slp_lo slp_hi);
+  slp_lo = b1 + b3 * sqrt(var_w) * (-1);
+  slp_hi = b1 + b3 * sqrt(var_w);
 }
-
-The legend labels dynamically include the simple slope estimates, standard errors, and p-values, separated by a new line (`\\n`).
 }
 \examples{
 \dontrun{
-# Example usage:
-simple_slope(model,
-             x = "x",
-             w = "w",
-             int = "int",
-             y = "y",
-             slp_h = "slp_hi",
-             slp_l = "slp_lo",
+library(MplusAutomation)
+
+# --- Observed variable model (path analysis) ---
+res <- readModels("path/to/output", filefilter = "manifest_mod")
+
+# Plot with legend in upper left corner
+simple_slope(res,
+             x = "parent", w = "res", int = "int", y = "se",
+             slp_l = "slp_lo", slp_h = "slp_hi",
              legend_position = "UL")
+
+# --- Latent variable model (SEM with latent interaction) ---
+res_sem <- readModels("path/to/output", filefilter = "sem_mod")
+
+# Plot with default legend position
+simple_slope(res_sem,
+             x = "parent", w = "res", int = "int", y = "atl",
+             slp_l = "slp_lo", slp_h = "slp_hi")
+
+# Return plotting data instead of the figure
+plot_df <- simple_slope(res_sem,
+                        x = "parent", w = "res", int = "int", y = "atl",
+                        slp_l = "slp_lo", slp_h = "slp_hi",
+                        return_data = TRUE)
+
+# Override automatically extracted values
+simple_slope(res_sem,
+             x = "parent", w = "res", int = "int", y = "atl",
+             slp_l = "slp_lo", slp_h = "slp_hi",
+             mean_x = 0, mean_w = 0,
+             var_x = 0.357, var_w = 0.386)
 }
 
 }
