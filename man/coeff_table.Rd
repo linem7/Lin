@@ -2,102 +2,197 @@
 % Please edit documentation in R/coeff_table.R
 \name{coeff_table}
 \alias{coeff_table}
-\title{Generate a Regression Coefficient Table with Fit Indices}
+\title{Create formatted tables for Mplus models}
 \usage{
 coeff_table(
-  ...,
-  stat = c("est", "se", "p"),
+  model,
+  stat = c("est", "se", "p", "ci"),
   indices = character(0),
   digits_coeff = 2,
   digits_fit = 2,
-  standardized = FALSE,
+  digits_pct = 1,
+  standardized = TRUE,
   stars = TRUE,
-  params = "regression",
+  ci_level = 0.95,
   exclude = character(0),
-  order_by = c("lhs", "rhs"),
-  annotations = NULL,
-  model_names = NULL,
-  title = "Table X. Unstandardized regression coefficients and model‑fit indices.",
-  notes = "Unstandardized coefficients are reported."
+  title_coeff = "Table X. Path coefficients.",
+  title_fit = "Table X. Model fit indices.",
+  title_indirect = "Table X. Direct, indirect, and total effects.",
+  notes_coeff = NULL,
+  notes_indirect = NULL,
+  include_indirect = FALSE,
+  render = TRUE
 )
 }
 \arguments{
-\item{...}{One or more MplusAutomation model objects (or lists thereof),
-each containing a `$summaries` slot.}
+\item{model}{A single \code{mplus.model} object returned by
+\code{MplusAutomation::readModels()}.}
 
-\item{stat}{Character vector of coefficient statistics to include.
-Choices: `"est"`, `"se"`, `"z"`, `"p"`.  Use `"all"` to select all four.}
+\item{stat}{Character vector of statistics to display for each path.
+Any combination of \code{"est"} (point estimate), \code{"se"} (standard
+error), \code{"z"} (z-statistic, i.e.\ est/se), \code{"p"} (p-value),
+and \code{"ci"} (bootstrap confidence interval extracted from Mplus
+CINTERVAL output). Defaults to \code{c("est", "se", "p", "ci")}.}
 
-\item{indices}{Character vector of additional fit‐index names to append
-(e.g. `"AIC"`, `"BIC"`).}
+\item{indices}{Character vector of additional fit indices to include beyond
+the default set (\eqn{\chi^2}, df, \eqn{\chi^2}/df, CFI, TLI, RMSEA,
+SRMR). Names must match columns in
+\code{model$summaries} (e.g.\ \code{"AIC"}, \code{"BIC"}).}
 
-\item{digits_coeff}{Integer: number of decimal places for coefficient values.}
+\item{digits_coeff}{Integer. Number of decimal places for coefficient
+estimates, standard errors, and confidence interval bounds.
+Defaults to \code{2}.}
 
-\item{digits_fit}{Integer: number of decimal places for fit‐index values.}
+\item{digits_fit}{Integer. Number of decimal places for fit indices.
+Defaults to \code{2}.}
 
-\item{standardized}{Logical: if `TRUE`, use standardized coefficients (β) instead of b.}
+\item{digits_pct}{Integer. Number of decimal places for effect proportions
+in the indirect-effects table. Defaults to \code{1}.}
 
-\item{stars}{Logical: if `TRUE`, append significance stars based on p‐value.}
+\item{standardized}{Logical. If \code{TRUE} (default), report
+STDYX-standardised estimates for regression paths. MODEL CONSTRAINT (NEW)
+parameters are always reported as unstandardised because Mplus does not
+produce standardised estimates for them. If \code{FALSE}, unstandardised
+estimates are used throughout.}
 
-\item{params}{Character vector of parameter classes to include.
-Options: `"loading"`, `"regression"`, `"expectation"`,
-`"undirected"`, `"variability"`, `"new"`, `"other"`.}
+\item{stars}{Logical. If \code{TRUE}, append significance stars to point
+estimates (\code{*} p < .05, \code{**} p < .01, \code{***} p < .001).
+Defaults to \code{TRUE}.}
 
-\item{exclude}{Character vector of regular expressions; any row whose RHS
-matches will be dropped.}
+\item{ci_level}{Numeric. Confidence level for extracted intervals.
+Currently only \code{0.95} is supported (Mplus outputs 2.5\% and 97.5\%
+percentiles). Reserved for future extension.}
 
-\item{order_by}{Character: `"lhs"` or `"rhs"`, specifying the secondary sort key.}
+\item{exclude}{Character vector of PCRE patterns. Predictors whose names
+match any pattern are excluded from the path-coefficient table.}
 
-\item{annotations}{Named list of character vectors for manual row annotations.
-Length must equal the number of retained coefficient rows.}
+\item{title_coeff, title_fit, title_indirect}{Character strings used as table
+captions when rendering.}
 
-\item{model_names}{Optional character vector to override the auto‐detected
-model labels (filenames).  Must match the number of models.}
+\item{notes_coeff}{Character string appended as a general footnote to the
+path-coefficient table.}
 
-\item{title}{Character: caption for the output table.}
+\item{notes_indirect}{Character string appended as a general footnote to the
+indirect-effects table. When suppression (inconsistent mediation) is
+detected, an explanatory note is appended automatically.}
 
-\item{notes}{Character: footnote text to display under the table.}
+\item{include_indirect}{Logical. If \code{TRUE}, extract and display the
+indirect-effects decomposition table from the MODEL INDIRECT section. If
+\code{FALSE} (default), only the fit and coefficient tables are produced,
+which allows the function to work with any SEM or regression model that
+does not include a MODEL INDIRECT command.}
+
+\item{render}{Logical. If \code{TRUE} (default), tables are printed as
+\pkg{kableExtra} HTML tables and the underlying list is returned
+invisibly. If \code{FALSE}, no rendering is performed and the list is
+returned visibly, which is convenient for passing results to other
+programs or AI-based interpretation.}
 }
 \value{
-A **knitr**/**kableExtra** table object, with:
-  - Annotation columns (if any) on the left
-  - LHS | Operator | RHS structural columns
-  - One block of coefficient rows, ordered by operator and `order_by`
-  - One block of fit‐index rows appended below
-  - Header spanners grouping each model’s statistic columns
+A list with the following elements:
+\describe{
+  \item{\code{fit}}{A one-row \code{data.frame} of model fit indices.
+    Column names are human-readable labels (e.g.\ \eqn{\chi^2}, df, CFI).}
+  \item{\code{coeff}}{A \code{data.frame} with predictors as rows and
+    endogenous-variable \eqn{\times} statistic combinations as columns.
+    When MODEL CONSTRAINT (NEW) parameters exist, they occupy the bottom
+    rows (below row \code{.meta$n_reg}).}
+  \item{\code{indirect}}{A \code{data.frame} with columns
+    \code{Predictor}, \code{Outcome}, \code{Effect} (Total / Total Indirect
+    / Specific Indirect / Direct), \code{Path} (arrow-delimited mediator
+    chain), \code{est}, \code{se}, \code{p}, \code{ci}, and \code{pct}
+    (effect proportion). \code{NULL} when \code{include_indirect = FALSE}
+    or when no MODEL INDIRECT section exists in the output.}
+  \item{\code{.meta}}{A list of rendering metadata: \code{endogenous}
+    (character vector of endogenous variable names), \code{stat},
+    \code{n_reg} (number of regression rows before NEW parameters),
+    \code{has_new}, \code{standardized}, and \code{suppression} (logical
+    flag for inconsistent mediation).}
+}
+When \code{render = TRUE} the list is returned \strong{invisibly}.
 }
 \description{
-`coeff_table()` takes one or more MplusAutomation model objects (or nested lists thereof),
-extracts their regression (and other) parameter estimates plus fit‐index statistics,
-and returns a publication‐ready table via **knitr**/**kableExtra**.  You can customize:
-
-- Which statistics to display (estimates, SE, z, p; “all” for every one).
-- Whether to include standardized coefficients.
-- Significance stars on estimates.
-- Which parameter types to keep (regression paths, loadings, intercepts, etc.).
-- Regex filters to drop unwanted rows.
-- Row order by LHS or RHS of the formula.
-- User‐supplied annotation columns (must be a named list of character vectors).
-- Model header labels (overrides filenames).
-- Caption and footnote text.
+Extracts and organises results from an Mplus model
+(read via \code{MplusAutomation::readModels()}) into up to three
+publication-ready tables: model fit indices, path coefficients (with
+MODEL CONSTRAINT parameters when present), and a decomposition of total,
+indirect, and direct effects. Tables can be rendered as \pkg{kableExtra}
+HTML tables or returned as plain \code{data.frame}s for downstream
+processing.
 }
+\section{Effect proportions}{
+
+When the direct and all specific indirect effects share the same sign
+(consistent mediation), proportions are computed as
+\eqn{\mathrm{effect} / \mathrm{total\;effect}}.
+When the direct and any indirect effect have opposite signs (inconsistent
+mediation / suppression), proportions are computed as
+\eqn{|\mathrm{indirect} / \mathrm{direct}|} instead, and a footnote plus a
+console message alert the user. The Total row never shows a proportion.
+}
+
+\section{Confidence intervals}{
+
+The function reads bootstrap (or Bayesian credibility) intervals directly
+from the Mplus CINTERVAL output parsed by \pkg{MplusAutomation}. Symmetric
+Wald-type intervals are \strong{not} computed. If the output file does not
+contain a CINTERVAL section, the CI column will be blank.
+}
+
 \examples{
 \dontrun{
-# Single model, unstandardized regression paths
-m1 <- readModels("path/to/model1.out")
-coeff_table(m1, stat = c("est","se","p"))
+## -- Example Mplus syntax: serial mediation X -> M1 -> M2 -> Y --
+##
+## TITLE:  Serial mediation with bootstrap CI;
+## DATA:   FILE = mydata.dat;
+## VARIABLE:
+##   NAMES = x m1 m2 y c1 c2;
+##   USEVARIABLES = x m1 m2 y c1 c2;
+##
+## ANALYSIS:
+##   BOOTSTRAP = 5000;
+##
+## MODEL:
+##   m1 ON x c1 c2;
+##   m2 ON m1 x c1 c2;
+##   y  ON m2 m1 x c1 c2;
+##
+## MODEL INDIRECT:
+##   y IND m2 m1 x;   ! X -> M1 -> M2 -> Y  (full serial chain)
+##   y IND m1 x;       ! X -> M1 -> Y
+##   y IND m2 x;       ! X -> M2 -> Y
+##
+## MODEL CONSTRAINT:
+##   NEW(diff);
+##   diff = ind_m1 - ind_m2;  ! difference between two indirect paths
+##
+## OUTPUT:
+##   CINTERVAL(BCBOOTSTRAP);
+##   STANDARDIZED;
 
-# Two models, all stats, custom AIC/BIC, and manual annotations
-m2 <- readModels("path/to/model2.out")
-coeff_table(m1, m2,
-            stat        = "all",
-            indices     = c("AIC","BIC"),
-            annotations = list(
-              Group = rep(c("A","B"), each = 5)
-            ))
+## -- Read the output in R --
+library(MplusAutomation)
+mod <- readModels("serial_med.out")
+
+## -- Default: fit + standardised coefficients only --
+coeff_table(mod)
+
+## -- Full mediation report with indirect effects --
+coeff_table(mod, include_indirect = TRUE)
+
+## -- Unstandardised, extra fit indices --
+coeff_table(mod, standardized = FALSE, indices = c("AIC", "BIC"),
+                include_indirect = TRUE)
+
+## -- Raw data.frames for AI interpretation --
+res <- coeff_table(mod, include_indirect = TRUE, render = FALSE)
+res$fit
+res$coeff
+res$indirect
 }
 
 }
 \seealso{
-\code{\link[knitr]{kable}}, \code{\link[kableExtra]{add_header_above}}
+\code{\link[MplusAutomation]{readModels}} for reading Mplus output;
+  \code{\link[kableExtra]{kable_classic}} for table styling.
 }
