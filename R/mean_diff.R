@@ -59,7 +59,7 @@
 #' @export
 mean_diff <- function(
     dv, iv, data,
-    stars = FALSE, effect = FALSE,
+    stars = TRUE, effect = FALSE,
     digits_desc = 2, digits_stat = 3,
     p.adjust.method = c("bonferroni", "holm", "none")
 ) {
@@ -71,7 +71,10 @@ mean_diff <- function(
   star_fun <- function(p) {
     if (p < .001) "***" else if (p < .01) "**" else if (p < .05) "*" else ""
   }
-  p_fmt <- function(p) if (p < .001) "< 0.001" else num_fmt(p, digits_stat)
+  p_fmt <- function(p) {
+    if (p < .001) return("< .001")
+    sub("^0\\.", ".", num_fmt(p, digits_stat))
+  }
 
   out <- setNames(vector("list", length(dv)), dv)
 

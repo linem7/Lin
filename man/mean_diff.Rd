@@ -8,7 +8,7 @@ mean_diff(
   dv,
   iv,
   data,
-  stars = FALSE,
+  stars = TRUE,
   effect = FALSE,
   digits_desc = 2,
   digits_stat = 3,
