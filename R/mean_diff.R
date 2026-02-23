@@ -98,6 +98,11 @@ mean_diff <- function(
                                   desc$Mean, desc$SD)
       desc$Mean <- desc$SD <- NULL
 
+      # Number the categories for readability
+      cat_levels <- levels(sub[[g]])
+      cat_num_map <- setNames(seq_along(cat_levels), cat_levels)
+      desc$Category <- paste0(cat_num_map[as.character(desc$Category)], ". ", desc$Category)
+
       # Tests ---------------------------------------------------------------
       if (k == 2) {
         lev_p <- car::leveneTest(sub[[d]] ~ sub[[g]])[1, "Pr(>F)"]
@@ -119,12 +124,16 @@ mean_diff <- function(
           pw <- pairwise.t.test(sub[[d]], sub[[g]], p.adjust.method = p.adjust.method)
           sig <- which(pw$p.value < .05, arr.ind = TRUE)
           if (nrow(sig)) {
-            comps <- apply(sig, 1, function(idx) {
+            comp_df <- do.call(rbind, lapply(seq_len(nrow(sig)), function(i) {
+              idx <- sig[i, ]
               l1 <- rownames(pw$p.value)[idx[1]]; l2 <- colnames(pw$p.value)[idx[2]]
+              n1 <- cat_num_map[l1]; n2 <- cat_num_map[l2]
               m1 <- mean(sub[[d]][sub[[g]]==l1]); m2 <- mean(sub[[d]][sub[[g]]==l2])
-              if (m1 > m2) paste0(l1, " > ", l2) else paste0(l2, " > ", l1)
-            })
-            post_str <- paste(unique(comps), collapse = "; ")
+              if (m1 > m2) data.frame(hi = n1, lo = n2) else data.frame(hi = n2, lo = n1)
+            }))
+            comp_df <- unique(comp_df)
+            comp_df <- comp_df[order(-comp_df$hi, -comp_df$lo), ]
+            post_str <- paste0(comp_df$hi, " > ", comp_df$lo, collapse = "; ")
           }
         }
       }
