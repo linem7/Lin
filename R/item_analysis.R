@@ -1,87 +1,126 @@
 #' Item Analysis for Classical Test Theory
 #'
-#' Computes a variety of item‐level statistics for scales (e.g., means, SDs,
-#' skewness, kurtosis, extreme‐group discrimination, Cronbach’s α if item deleted,
-#' and corrected item–total correlations with significance stars), plus overall
+#' Computes a variety of item-level statistics for scales (e.g., means, SDs,
+#' skewness, kurtosis, extreme-group discrimination, Cronbach's alpha if item deleted,
+#' and corrected item-total correlations with significance stars), plus overall
 #' reliability.
 #'
 #' @param data A data frame containing item response columns.
-#' @param pattern A glue‐style pattern for item names (e.g. `"item{i}"`).
-#'   The placeholder `i` will be filled by each value in `indices`.
-#' @param indices An integer vector of indices to substitute into `pattern`.
-#'   For example, `pattern = "item{i}", indices = 1:5` selects `"item1"` … `"item5"`.
+#' @param ... <[`tidy-select`][dplyr::dplyr_tidy_select]> Column selection
+#'   supporting all tidyselect syntax. You can use:
+#'   \itemize{
+#'     \item Column ranges: \code{item1:item5}
+#'     \item Specific columns: \code{c(item1, item3, item5)}
+#'     \item Selection helpers: \code{starts_with("A")}, \code{contains("scale")}
+#'     \item Custom pattern helper: \code{pattern("Q{i}_rev", 1:5)}
+#'   }
+#'   These forms can be combined freely within a single call.
 #' @param digits Integer; number of decimal places for skewness, kurtosis, CR, CITC,
-#'   and alpha‐if‐deleted values. Means and SDs are always formatted to two decimals.
+#'   and alpha-if-deleted values. Means and SDs are always formatted to two decimals.
 #'   Default is 3.
-#' @param total Logical; if `TRUE`, prepends a “Total” column with the overall
-#'   Cronbach’s α in the first row and blanks elsewhere. Default is `TRUE`.
-#' @param ... Additional arguments passed to `psych::alpha()` (e.g.
-#'   `check.keys = TRUE` to auto‐flip negatively keyed items).
+#' @param total Logical; if \code{TRUE}, appends a "Total" column with the overall
+#'   Cronbach's alpha in the first row and blanks elsewhere. Default is \code{TRUE}.
 #'
 #' @return A data frame with one row per item and the following columns:
-#' \item{Mean}{Item mean score.}
-#' \item{SD}{Standard deviation of the item.}
+#' \item{Item}{Item name.}
+#' \item{Mean}{Item mean score (2 decimal places).}
+#' \item{SD}{Standard deviation of the item (2 decimal places).}
 #' \item{Skew}{Skewness of the item distribution.}
 #' \item{Kurt}{Kurtosis of the item distribution.}
 #' \item{CR}{t-value from high vs. low group discrimination, with significance stars.}
-#' \item{Alpha if deleted}{Cronbach’s α when the item is removed.}
-#' \item{CITC}{Corrected item–total correlation, with significance stars.}
-#' \item{Total (optional)}{Overall α in the first row; blanks in remaining rows.}
+#' \item{Alpha.if" deleted}{Cronbach's alpha when the item is removed.}
+#' \item{CITC}{Corrected item-total correlation, with significance stars.}
+#' \item{Total}{(if \code{total = TRUE}) Overall alpha in the first row; blanks in remaining rows.}
 #'
-#' @importFrom dplyr select mutate left_join
+#' @importFrom dplyr select mutate left_join across filter pull everything case_when
+#' @importFrom tidyselect eval_select
+#' @importFrom rlang expr
 #' @importFrom tibble rownames_to_column
-#' @importFrom psych describe
-#' @importFrom glue glue
+#' @importFrom psych describe alpha
+#' @importFrom stats t.test cor.test quantile
+#' @importFrom car leveneTest
 #'
 #' @details
-#' The function constructs item names using \code{glue::glue()} with the provided \code{pattern} and \code{indices}, then selects those columns from the input \code{data}.
+#' Column selection is powered by \code{tidyselect}, providing the same flexibility
+#' available in \code{dplyr::select()}. The custom helper \code{pattern()} allows
+#' glue-style name generation (e.g., \code{pattern("item{i}", 1:5)} resolves to
+#' \code{item1, item2, ..., item5}) and can be used alongside any other tidyselect
+#' expression.
 #'
-#' To assess internal consistency, it computes overall reliability using \code{psych::alpha()} and extracts the \code{alpha.drop} table to obtain Cronbach’s α if each item were deleted. Total scores are calculated by summing across all selected items. Based on these scores, the function defines high and low performance groups using the 27th and 73rd percentiles, respectively.
+#' To assess internal consistency, the function computes overall reliability using
+#' \code{psych::alpha()} (with \code{check.keys = TRUE}) and extracts the
+#' \code{alpha.drop} table to obtain Cronbach's alpha when each item is removed.
 #'
-#' Descriptive statistics, including mean, standard deviation, skewness, and kurtosis, are calculated with \code{psych::describe()}. Means and SDs are formatted to two decimal places, while skewness and kurtosis are rounded based on the \code{digits} argument.
+#' Descriptive statistics, including mean, standard deviation, skewness, and kurtosis,
+#' are calculated with \code{psych::describe()}. Means and SDs are formatted to two
+#' decimal places, while skewness and kurtosis are rounded according to the
+#' \code{digits} argument.
 #'
-#' Discrimination (CR) is assessed through two-sample t-tests (\code{t.test()} with \code{var.equal = TRUE}) comparing high and low groups. t-values are formatted and annotated with significance stars. The corrected item–total correlation (CITC) is computed by correlating each item with the total score excluding that item, and formatted similarly with stars based on p-values.
+#' Extreme-group discrimination (CR) is assessed by splitting respondents into high
+#' (top 27\%) and low (bottom 27\%) groups based on total scores computed as row
+#' means across selected items. Levene's test (\code{car::leveneTest()}) determines
+#' whether equal-variance or Welch's t-test is applied. The resulting t-values are
+#' annotated with significance stars (* p < .05, ** p < .01, *** p < .001).
 #'
-#' Finally, all results—including descriptives, CR, α if deleted, CITC, and optionally the overall α—are merged into a tidy data frame. And the overall α can be displayed in a “Total” column in the first row if requested.
+#' The corrected item-total correlation (CITC) is computed by correlating each item
+#' with the sum of all remaining items, tested via \code{stats::cor.test()}, and
+#' formatted with the same significance star convention.
+#'
+#' All results are merged into a single data frame. If \code{total = TRUE}, the
+#' overall Cronbach's alpha is displayed in a "Total" column in the first row.
+#'
 #' @examples
 #' data(good_rel)
 #' data(poor_rel)
 #'
-#' # Good‐reliability example
-#' # good_rel: a data.frame where items 1–5 all load positively on one factor
-#' item_analysis(good_rel, pattern = "item{i}", indices = 1:5)
+#' # --- Column range ---
+#' item_analysis(good_rel, item1:item5)
 #'
-#' # Use Lin::apa() format the final output in html
-#' item_analysis(good_rel, pattern = "item{i}", indices = 1:5) %>% apa()#
+#' # --- Specific columns ---
+#' item_analysis(good_rel, c(item1, item3, item5))
 #'
-#' # Poor‐reliability example
-#' # poor_rel: a data.frame with random noise or mixed floor/ceiling effects
-#' item_analysis(poor_rel, pattern = "item{i}", indices = 1:5, check.keys = TRUE)
+#' # --- Selection helper ---
+#' item_analysis(good_rel, starts_with("item"))
+#'
+#' # --- Pattern helper (glue-style) ---
+#' item_analysis(good_rel, pattern("item{i}", 1:5))
+#'
+#' # --- Combine multiple selectors ---
+#' # item_analysis(my_data, starts_with("qp"), starts_with("hc"))
+#'
+#' # --- Format with apa() ---
+#' item_analysis(good_rel, item1:item5) %>% apa()
+#'
+#' # --- Poor-reliability example ---
+#' item_analysis(poor_rel, pattern("item{i}", 1:5))
 #'
 #' @export
 
 item_analysis <- function(data,
-                          pattern,
-                          indices,
+                          ...,
                           digits = 3,
-                          total  = TRUE,
-                          ...) {
+                          total  = TRUE) {
+
   #── Dependencies
-  if (!requireNamespace("dplyr", quietly = TRUE))  stop("Install dplyr")
-  if (!requireNamespace("psych", quietly = TRUE))  stop("Install psych")
-  if (!requireNamespace("glue", quietly = TRUE))   stop("Install glue")
-  if (!requireNamespace("tibble", quietly = TRUE)) stop("Install tibble")
+  if (!requireNamespace("dplyr", quietly = TRUE))      stop("Install dplyr")
+  if (!requireNamespace("psych", quietly = TRUE))       stop("Install psych")
+  if (!requireNamespace("tidyselect", quietly = TRUE))  stop("Install tidyselect")
+  if (!requireNamespace("tibble", quietly = TRUE))      stop("Install tibble")
 
-  #── 1. Build and select item columns
-  item_names     <- as.character(glue::glue(pattern, i = indices))
-  selected_items <- data %>% dplyr::select(dplyr::all_of(item_names))
+  #── 1. Resolve column selection via tidyselect
+  col_pos <- tidyselect::eval_select(rlang::expr(c(...)), data = data)
 
-  #── 2. Compute total α (with any extra args) and get alpha.drop
-  psych_alpha <- psych::alpha
-  alpha_res       <- psych_alpha(selected_items, ...)
+  if (length(col_pos) == 0) {
+    stop("No columns matched. Please check your selection.")
+  }
+
+  item_names     <- names(col_pos)
+  selected_items <- data[, col_pos, drop = FALSE]
+
+  #── 2. Compute total alpha and get alpha.drop
+  alpha_res <- suppressWarnings(psych::alpha(selected_items, check.keys = TRUE))
   ad <- alpha_res$alpha.drop
   if (is.data.frame(ad)) {
-    # prefer a column named “raw_alpha” if it exists
     if ("raw_alpha" %in% colnames(ad)) {
       drop_vals <- ad[["raw_alpha"]]
     } else {
@@ -95,10 +134,10 @@ item_analysis <- function(data,
   #── 3. Prepare for CR: compute TotalScore & high/low groups
   tmp <- selected_items %>%
     dplyr::mutate(
-      TotalScore = rowMeans(across(everything()), na.rm = TRUE),
+      TotalScore = rowMeans(dplyr::across(dplyr::everything()), na.rm = TRUE),
       PerformanceGroup = dplyr::case_when(
-        TotalScore <= quantile(TotalScore, 0.27, na.rm = TRUE) ~ "Low",
-        TotalScore >= quantile(TotalScore, 0.73, na.rm = TRUE) ~ "High",
+        TotalScore <= stats::quantile(TotalScore, 0.27, na.rm = TRUE) ~ "Low",
+        TotalScore >= stats::quantile(TotalScore, 0.73, na.rm = TRUE) ~ "High",
         TRUE ~ NA_character_
       )
     )
@@ -117,10 +156,9 @@ item_analysis <- function(data,
 
   #── 5. CR via t.test + stars
   cr_df <- do.call(rbind, lapply(item_names, function(it) {
-    high <- tmp %>% filter(PerformanceGroup == "High") %>% pull(.data[[it]])
-    low  <- tmp %>% filter(PerformanceGroup == "Low")  %>% pull(.data[[it]])
+    high <- tmp %>% dplyr::filter(PerformanceGroup == "High") %>% dplyr::pull(.data[[it]])
+    low  <- tmp %>% dplyr::filter(PerformanceGroup == "Low")  %>% dplyr::pull(.data[[it]])
 
-    # prepare for Levene’s test
     lev_df <- data.frame(
       value = c(high, low),
       group = factor(rep(c("High","Low"), c(length(high), length(low))))
@@ -128,8 +166,7 @@ item_analysis <- function(data,
     p_lev   <- car::leveneTest(value ~ group, data = lev_df)[1, "Pr(>F)"]
     eq_var  <- (p_lev > 0.05)
 
-    # run the matching t‐test
-    tt   <- t.test(high, low, var.equal = eq_var)
+    tt   <- stats::t.test(high, low, var.equal = eq_var)
     stars <- if (tt$p.value < 0.001) "***" else
       if (tt$p.value < 0.01)  "**"  else
         if (tt$p.value < 0.05)  "*"   else ""
@@ -137,18 +174,18 @@ item_analysis <- function(data,
     data.frame(Item = it, CR = paste0(t_fmt, stars), stringsAsFactors = FALSE)
   }))
 
-  #── 6. Alpha if deleted (from psych::alpha)
+  #── 6. Alpha if deleted
   alpha_drop_df <- data.frame(
     Item               = item_names,
     `Alpha if deleted` = sprintf(paste0("%.", digits, "f"), drop_vals),
     stringsAsFactors   = FALSE
   )
 
-  #── 7. CITC: correlate each item with sum of the others + stars
+  #── 7. CITC
   citc_df <- do.call(rbind, lapply(item_names, function(it) {
     others  <- setdiff(item_names, it)
     sum_oth <- rowSums(selected_items[, others, drop = FALSE], na.rm = TRUE)
-    ct      <- cor.test(selected_items[[it]], sum_oth)
+    ct      <- stats::cor.test(selected_items[[it]], sum_oth)
     stars   <- if (ct$p.value < 0.001) "***" else
       if (ct$p.value < 0.01)  "**"  else
         if (ct$p.value < 0.05)  "*"   else ""
@@ -162,13 +199,13 @@ item_analysis <- function(data,
     dplyr::left_join(alpha_drop_df, by = "Item") %>%
     dplyr::left_join(citc_df,       by = "Item")
 
-  #── 9. Add Total‐alpha column if requested
+  #── 9. Add Total-alpha column if requested
   if (total) {
     tot <- sprintf(paste0("%.", digits, "f"), alpha_res$total$raw_alpha)
     final_df$Total <- c(tot, rep("", nrow(final_df) - 1))
   }
 
-  #── 10. Clean up any NAs → blanks
+  #── 10. Clean up any NAs to blanks
   final_df[is.na(final_df)] <- ""
 
   #── Return

@@ -9,53 +9,133 @@ simulate_efa(
   items_to_drop = list(),
   n_obs = 300,
   likert_points = 5,
+  factor_cor = 0.3,
+  loading_range = c(0.7, 0.85),
   skew_params = list(good = -0.5, bad = 2, jitter = 0.2),
   ia_thresholds = list(citc = 0.2, p_val = 0.05),
-  efa_thresholds = list(main_load = 0.4, cross_load = 0.35),
+  efa_thresholds = list(main_load = 0.4, cross_load = 0.32),
   details = FALSE
 )
 }
 \arguments{
-\item{model_syntax}{A string containing the factor structure in lavaan syntax (e.g., 'f1 =~ x1 + x2').}
+\item{model_syntax}{A string containing the factor structure in lavaan syntax
+(e.g., \code{'F1 =~ x1 + x2 + x3'}). Each factor definition should occupy
+its own line. Items that already contain explicit loading specifications
+(e.g., \code{0.8*x1}) will not be overwritten by \code{loading_range}.}
 
-\item{items_to_drop}{A named list specifying items to be manipulated to fail at specific stages.
-Example: \code{list(stage1 = c("x1"), stage2 = c("x5"))}.}
+\item{items_to_drop}{A named list specifying items to be manipulated to fail
+at specific stages.
+\describe{
+  \item{\code{stage1}}{Character vector. Items whose signals will be diluted
+    (15\% signal + 85\% noise) to produce low Corrected Item-Total
+    Correlations (CITC), making them candidates for deletion in Item Analysis.}
+  \item{\code{stage2}}{Character vector. In multidimensional models, these
+    items receive a cross-loading (0.5) on a non-target factor. In
+    unidimensional models, their signals are diluted (30\% signal + 70\%
+    noise) to produce low factor loadings in EFA.}
+}}
 
 \item{n_obs}{Integer. Sample size (default = 300).}
 
 \item{likert_points}{Integer. Number of points on the Likert scale (default = 5).}
 
+\item{factor_cor}{Controls the correlations among latent factors.
+Ignored when the model contains only one factor. Accepts three forms:
+\describe{
+  \item{Single numeric}{A scalar (default = 0.3) applied to every pair of
+    factors. For example, \code{factor_cor = 0.5} sets all pairwise
+    correlations to 0.5.}
+  \item{Symmetric matrix}{A \eqn{k \times k} correlation matrix where
+    \eqn{k} equals the number of factors. Row and column names, if present,
+    must match the factor names in \code{model_syntax}. Diagonal elements
+    should be 1.}
+  \item{\code{NULL}}{No factor covariance syntax is appended. lavaan will
+    use its own defaults (typically free estimation, which under
+    \code{standardized = TRUE} may default to zero).}
+}}
+
+\item{loading_range}{A numeric vector of length 2 specifying the lower and
+upper bounds for randomly generated factor loadings (default =
+\code{c(0.70, 0.85)}). Each item without an explicit loading in
+\code{model_syntax} receives a loading drawn from
+\code{Uniform(loading_range[1], loading_range[2])}. Set to \code{NULL}
+to skip loading injection and use lavaan defaults.}
+
 \item{skew_params}{A named list controlling skewness for realism.
-\code{good}: skewness for normal items (e.g., -0.5).
-\code{bad}: skewness for Stage 1 bad items (e.g., 2.0).
-\code{jitter}: random noise added to skewness.}
+\describe{
+  \item{\code{good}}{Skewness applied to normal items (default = -0.5).}
+  \item{\code{bad}}{Absolute skewness applied to Stage 1 bad items, with
+    sign randomly flipped (default = 2.0).}
+  \item{\code{jitter}}{Maximum random deviation added to the skewness of
+    normal items (default = 0.2).}
+}}
 
-\item{ia_thresholds}{A named list of thresholds for Item Analysis logic checks.
-\code{citc}: Corrected Item-Total Correlation threshold (default 0.2).
-\code{p_val}: P-value threshold for Critical Ratio (CR) t-test (default 0.05).}
+\item{ia_thresholds}{A named list of thresholds for Item Analysis.
+\describe{
+  \item{\code{citc}}{Corrected Item-Total Correlation threshold (default = 0.2).}
+  \item{\code{p_val}}{P-value threshold for the Critical Ratio t-test
+    (default = 0.05).}
+}}
 
-\item{efa_thresholds}{A named list of thresholds for EFA logic checks.
-\code{main_load}: Minimum main loading (default 0.4).
-\code{cross_load}: Maximum allowed cross-loading (default 0.35).}
+\item{efa_thresholds}{A named list of thresholds for the internal EFA check.
+\describe{
+  \item{\code{main_load}}{Minimum acceptable main loading (default = 0.4).}
+  \item{\code{cross_load}}{Maximum acceptable cross-loading (default = 0.35).
+    Only evaluated in multidimensional models.}
+}}
 
 \item{details}{Logical.
-If \code{FALSE} (default), prints only the summary logs of items recommended for deletion.
-If \code{TRUE}, prints detailed statistical tables (Item Analysis with stars) and detailed EFA results (using bruceR).}
+If \code{FALSE} (default), prints only the summary logs of items
+recommended for deletion at each stage.
+If \code{TRUE}, prints the injected model syntax, factor correlation
+syntax, detailed Item Analysis tables (with significance stars), and
+detailed EFA results (via \pkg{bruceR} if available).}
 }
 \value{
 A \code{data.frame} containing the simulated Likert scale data.
+  All columns are numeric. The data frame includes every item specified in
+  \code{model_syntax} (including bad items), so that the user can reproduce
+  the full item analysis and deletion workflow.
 }
 \description{
 Generates simulated Likert scale data based on a structural model (lavaan syntax).
 It allows specific items to be designated as "bad items" designed to be dropped
 during Item Analysis (Stage 1) or Exploratory Factor Analysis (Stage 2).
 }
+\details{
+The function provides control over factor loadings (\code{loading_range}),
+inter-factor correlations (\code{factor_cor}), and item-level skewness
+(\code{skew_params}) to produce data that resembles realistic survey responses.
+}
+\section{Workflow}{
+
+The function proceeds through the following stages internally:
+\enumerate{
+  \item \strong{Model construction.} Parse \code{model_syntax}, inject random
+    loadings (if \code{loading_range} is specified), and append factor
+    covariance syntax (if \code{factor_cor} is specified).
+  \item \strong{Data generation.} Call \code{lavaan::simulateData()} with the
+    assembled model. If \code{standardized = TRUE} fails (e.g., due to a
+    non-positive-definite implied matrix), the function falls back to
+    \code{standardized = FALSE} with post-hoc standardization.
+  \item \strong{Signal dilution.} Manipulate designated bad items at the
+    continuous (z-score) level before Likert conversion.
+  \item \strong{Likert conversion.} Map z-scores to discrete Likert values
+    using skewed quantile cutpoints.
+  \item \strong{Item Analysis (Stage 1).} Evaluate CITC, Critical Ratio,
+    and Cronbach's alpha if deleted for each factor's items.
+  \item \strong{EFA check (Stage 2).} Run an internal EFA
+    (\code{psych::fa()}) on the items surviving Stage 1 and flag those with
+    low main loadings or high cross-loadings.
+}
+}
+
 \examples{
 \dontrun{
-# Example 1: Unidimensional Model (1 factor, 10 items)
-# x1, x2: Bad items for Stage 1 (Low CITC)
-# x10: Bad item for Stage 2 (Low Loading)
-# Note: We use 10 items to ensure enough remain for EFA after dropping bad ones.
+# --- Example 1: Unidimensional Model ---
+# 1 factor, 10 items.
+# x1, x2 are designed to fail Item Analysis (Stage 1).
+# x10 is designed to show a low loading in EFA (Stage 2).
 model_uni <- 'F1 =~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10'
 bad_uni <- list(stage1 = c("x1", "x2"), stage2 = c("x10"))
 
@@ -63,24 +143,45 @@ df_uni <- simulate_efa(
   model_syntax = model_uni,
   items_to_drop = bad_uni,
   n_obs = 300,
+  loading_range = c(0.65, 0.80),
   details = TRUE
 )
 
-# Example 2: Multidimensional Model (2 factors, 10 items)
-# x1: Bad for Stage 1
-# x6: Bad for Stage 2 (Cross-loading)
-model_multi <- '
+# --- Example 2: Multidimensional Model with Scalar factor_cor ---
+# 3 factors, 15 items. All pairwise factor correlations set to 0.4.
+# x1 fails Stage 1; x6 cross-loads in Stage 2.
+model_3f <- '
   F1 =~ x1 + x2 + x3 + x4 + x5
   F2 =~ x6 + x7 + x8 + x9 + x10
+  F3 =~ x11 + x12 + x13 + x14 + x15
 '
-bad_multi <- list(stage1 = c("x1"), stage2 = c("x6"))
+bad_3f <- list(stage1 = c("x1"), stage2 = c("x6"))
 
-df_multi <- simulate_efa(
-  model_syntax = model_multi,
-  items_to_drop = bad_multi,
+df_3f <- simulate_efa(
+  model_syntax = model_3f,
+  items_to_drop = bad_3f,
   n_obs = 500,
-  skew_params = list(good = -0.5, bad = 2.0, jitter = 0.2),
-  details = FALSE # Will still print summary of drops
+  factor_cor = 0.4,
+  details = FALSE
+)
+
+# --- Example 3: Multidimensional Model with Correlation Matrix ---
+# Specify different correlations for each factor pair.
+cor_mat <- matrix(c(
+  1.0, 0.5, 0.2,
+  0.5, 1.0, 0.6,
+  0.2, 0.6, 1.0
+), nrow = 3, byrow = TRUE,
+   dimnames = list(c("F1","F2","F3"), c("F1","F2","F3")))
+
+df_custom <- simulate_efa(
+  model_syntax = model_3f,
+  items_to_drop = bad_3f,
+  n_obs = 400,
+  factor_cor = cor_mat,
+  loading_range = c(0.70, 0.90),
+  skew_params = list(good = -0.3, bad = 1.5, jitter = 0.1),
+  details = TRUE
 )
 }
 }

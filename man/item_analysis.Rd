@@ -4,68 +4,98 @@
 \alias{item_analysis}
 \title{Item Analysis for Classical Test Theory}
 \usage{
-item_analysis(data, pattern, indices, digits = 3, total = TRUE, ...)
+item_analysis(data, ..., digits = 3, total = TRUE)
 }
 \arguments{
 \item{data}{A data frame containing item response columns.}
 
-\item{pattern}{A glue‐style pattern for item names (e.g. `"item{i}"`).
-The placeholder `i` will be filled by each value in `indices`.}
-
-\item{indices}{An integer vector of indices to substitute into `pattern`.
-For example, `pattern = "item{i}", indices = 1:5` selects `"item1"` … `"item5"`.}
+\item{...}{<[`tidy-select`][dplyr::dplyr_tidy_select]> Column selection
+supporting all tidyselect syntax. You can use:
+\itemize{
+  \item Column ranges: \code{item1:item5}
+  \item Specific columns: \code{c(item1, item3, item5)}
+  \item Selection helpers: \code{starts_with("A")}, \code{contains("scale")}
+  \item Custom pattern helper: \code{pattern("Q{i}_rev", 1:5)}
+}
+These forms can be combined freely within a single call.}
 
 \item{digits}{Integer; number of decimal places for skewness, kurtosis, CR, CITC,
-and alpha‐if‐deleted values. Means and SDs are always formatted to two decimals.
+and alpha-if-deleted values. Means and SDs are always formatted to two decimals.
 Default is 3.}
 
-\item{total}{Logical; if `TRUE`, prepends a “Total” column with the overall
-Cronbach’s α in the first row and blanks elsewhere. Default is `TRUE`.}
-
-\item{...}{Additional arguments passed to `psych::alpha()` (e.g.
-`check.keys = TRUE` to auto‐flip negatively keyed items).}
+\item{total}{Logical; if \code{TRUE}, appends a "Total" column with the overall
+Cronbach's alpha in the first row and blanks elsewhere. Default is \code{TRUE}.}
 }
 \value{
 A data frame with one row per item and the following columns:
-\item{Mean}{Item mean score.}
-\item{SD}{Standard deviation of the item.}
+\item{Item}{Item name.}
+\item{Mean}{Item mean score (2 decimal places).}
+\item{SD}{Standard deviation of the item (2 decimal places).}
 \item{Skew}{Skewness of the item distribution.}
 \item{Kurt}{Kurtosis of the item distribution.}
 \item{CR}{t-value from high vs. low group discrimination, with significance stars.}
-\item{Alpha if deleted}{Cronbach’s α when the item is removed.}
-\item{CITC}{Corrected item–total correlation, with significance stars.}
-\item{Total (optional)}{Overall α in the first row; blanks in remaining rows.}
+\item{Alpha.if" deleted}{Cronbach's alpha when the item is removed.}
+\item{CITC}{Corrected item-total correlation, with significance stars.}
+\item{Total}{(if \code{total = TRUE}) Overall alpha in the first row; blanks in remaining rows.}
 }
 \description{
-Computes a variety of item‐level statistics for scales (e.g., means, SDs,
-skewness, kurtosis, extreme‐group discrimination, Cronbach’s α if item deleted,
-and corrected item–total correlations with significance stars), plus overall
+Computes a variety of item-level statistics for scales (e.g., means, SDs,
+skewness, kurtosis, extreme-group discrimination, Cronbach's alpha if item deleted,
+and corrected item-total correlations with significance stars), plus overall
 reliability.
 }
 \details{
-The function constructs item names using \code{glue::glue()} with the provided \code{pattern} and \code{indices}, then selects those columns from the input \code{data}.
+Column selection is powered by \code{tidyselect}, providing the same flexibility
+available in \code{dplyr::select()}. The custom helper \code{pattern()} allows
+glue-style name generation (e.g., \code{pattern("item{i}", 1:5)} resolves to
+\code{item1, item2, ..., item5}) and can be used alongside any other tidyselect
+expression.
 
-To assess internal consistency, it computes overall reliability using \code{psych::alpha()} and extracts the \code{alpha.drop} table to obtain Cronbach’s α if each item were deleted. Total scores are calculated by summing across all selected items. Based on these scores, the function defines high and low performance groups using the 27th and 73rd percentiles, respectively.
+To assess internal consistency, the function computes overall reliability using
+\code{psych::alpha()} (with \code{check.keys = TRUE}) and extracts the
+\code{alpha.drop} table to obtain Cronbach's alpha when each item is removed.
 
-Descriptive statistics, including mean, standard deviation, skewness, and kurtosis, are calculated with \code{psych::describe()}. Means and SDs are formatted to two decimal places, while skewness and kurtosis are rounded based on the \code{digits} argument.
+Descriptive statistics, including mean, standard deviation, skewness, and kurtosis,
+are calculated with \code{psych::describe()}. Means and SDs are formatted to two
+decimal places, while skewness and kurtosis are rounded according to the
+\code{digits} argument.
 
-Discrimination (CR) is assessed through two-sample t-tests (\code{t.test()} with \code{var.equal = TRUE}) comparing high and low groups. t-values are formatted and annotated with significance stars. The corrected item–total correlation (CITC) is computed by correlating each item with the total score excluding that item, and formatted similarly with stars based on p-values.
+Extreme-group discrimination (CR) is assessed by splitting respondents into high
+(top 27\%) and low (bottom 27\%) groups based on total scores computed as row
+means across selected items. Levene's test (\code{car::leveneTest()}) determines
+whether equal-variance or Welch's t-test is applied. The resulting t-values are
+annotated with significance stars (* p < .05, ** p < .01, *** p < .001).
 
-Finally, all results—including descriptives, CR, α if deleted, CITC, and optionally the overall α—are merged into a tidy data frame. And the overall α can be displayed in a “Total” column in the first row if requested.
+The corrected item-total correlation (CITC) is computed by correlating each item
+with the sum of all remaining items, tested via \code{stats::cor.test()}, and
+formatted with the same significance star convention.
+
+All results are merged into a single data frame. If \code{total = TRUE}, the
+overall Cronbach's alpha is displayed in a "Total" column in the first row.
 }
 \examples{
 data(good_rel)
 data(poor_rel)
 
-# Good‐reliability example
-# good_rel: a data.frame where items 1–5 all load positively on one factor
-item_analysis(good_rel, pattern = "item{i}", indices = 1:5)
+# --- Column range ---
+item_analysis(good_rel, item1:item5)
 
-# Use Lin::apa() format the final output in html
-item_analysis(good_rel, pattern = "item{i}", indices = 1:5) \%>\% apa()#
+# --- Specific columns ---
+item_analysis(good_rel, c(item1, item3, item5))
 
-# Poor‐reliability example
-# poor_rel: a data.frame with random noise or mixed floor/ceiling effects
-item_analysis(poor_rel, pattern = "item{i}", indices = 1:5, check.keys = TRUE)
+# --- Selection helper ---
+item_analysis(good_rel, starts_with("item"))
+
+# --- Pattern helper (glue-style) ---
+item_analysis(good_rel, pattern("item{i}", 1:5))
+
+# --- Combine multiple selectors ---
+# item_analysis(my_data, starts_with("qp"), starts_with("hc"))
+
+# --- Format with apa() ---
+item_analysis(good_rel, item1:item5) \%>\% apa()
+
+# --- Poor-reliability example ---
+item_analysis(poor_rel, pattern("item{i}", 1:5))
 
 }

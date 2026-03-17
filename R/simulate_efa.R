@@ -4,26 +4,99 @@
 #' It allows specific items to be designated as "bad items" designed to be dropped
 #' during Item Analysis (Stage 1) or Exploratory Factor Analysis (Stage 2).
 #'
-#' @param model_syntax A string containing the factor structure in lavaan syntax (e.g., 'f1 =~ x1 + x2').
-#' @param items_to_drop A named list specifying items to be manipulated to fail at specific stages.
-#'   Example: \code{list(stage1 = c("x1"), stage2 = c("x5"))}.
+#' The function provides control over factor loadings (\code{loading_range}),
+#' inter-factor correlations (\code{factor_cor}), and item-level skewness
+#' (\code{skew_params}) to produce data that resembles realistic survey responses.
+#'
+#' @param model_syntax A string containing the factor structure in lavaan syntax
+#'   (e.g., \code{'F1 =~ x1 + x2 + x3'}). Each factor definition should occupy
+#'   its own line. Items that already contain explicit loading specifications
+#'   (e.g., \code{0.8*x1}) will not be overwritten by \code{loading_range}.
+#' @param items_to_drop A named list specifying items to be manipulated to fail
+#'   at specific stages.
+#'   \describe{
+#'     \item{\code{stage1}}{Character vector. Items whose signals will be diluted
+#'       (15\% signal + 85\% noise) to produce low Corrected Item-Total
+#'       Correlations (CITC), making them candidates for deletion in Item Analysis.}
+#'     \item{\code{stage2}}{Character vector. In multidimensional models, these
+#'       items receive a cross-loading (0.5) on a non-target factor. In
+#'       unidimensional models, their signals are diluted (30\% signal + 70\%
+#'       noise) to produce low factor loadings in EFA.}
+#'   }
 #' @param n_obs Integer. Sample size (default = 300).
 #' @param likert_points Integer. Number of points on the Likert scale (default = 5).
+#' @param factor_cor Controls the correlations among latent factors.
+#'   Ignored when the model contains only one factor. Accepts three forms:
+#'   \describe{
+#'     \item{Single numeric}{A scalar (default = 0.3) applied to every pair of
+#'       factors. For example, \code{factor_cor = 0.5} sets all pairwise
+#'       correlations to 0.5.}
+#'     \item{Symmetric matrix}{A \eqn{k \times k} correlation matrix where
+#'       \eqn{k} equals the number of factors. Row and column names, if present,
+#'       must match the factor names in \code{model_syntax}. Diagonal elements
+#'       should be 1.}
+#'     \item{\code{NULL}}{No factor covariance syntax is appended. lavaan will
+#'       use its own defaults (typically free estimation, which under
+#'       \code{standardized = TRUE} may default to zero).}
+#'   }
+#' @param loading_range A numeric vector of length 2 specifying the lower and
+#'   upper bounds for randomly generated factor loadings (default =
+#'   \code{c(0.70, 0.85)}). Each item without an explicit loading in
+#'   \code{model_syntax} receives a loading drawn from
+#'   \code{Uniform(loading_range[1], loading_range[2])}. Set to \code{NULL}
+#'   to skip loading injection and use lavaan defaults.
 #' @param skew_params A named list controlling skewness for realism.
-#'   \code{good}: skewness for normal items (e.g., -0.5).
-#'   \code{bad}: skewness for Stage 1 bad items (e.g., 2.0).
-#'   \code{jitter}: random noise added to skewness.
-#' @param ia_thresholds A named list of thresholds for Item Analysis logic checks.
-#'   \code{citc}: Corrected Item-Total Correlation threshold (default 0.2).
-#'   \code{p_val}: P-value threshold for Critical Ratio (CR) t-test (default 0.05).
-#' @param efa_thresholds A named list of thresholds for EFA logic checks.
-#'   \code{main_load}: Minimum main loading (default 0.4).
-#'   \code{cross_load}: Maximum allowed cross-loading (default 0.35).
+#'   \describe{
+#'     \item{\code{good}}{Skewness applied to normal items (default = -0.5).}
+#'     \item{\code{bad}}{Absolute skewness applied to Stage 1 bad items, with
+#'       sign randomly flipped (default = 2.0).}
+#'     \item{\code{jitter}}{Maximum random deviation added to the skewness of
+#'       normal items (default = 0.2).}
+#'   }
+#' @param ia_thresholds A named list of thresholds for Item Analysis.
+#'   \describe{
+#'     \item{\code{citc}}{Corrected Item-Total Correlation threshold (default = 0.2).}
+#'     \item{\code{p_val}}{P-value threshold for the Critical Ratio t-test
+#'       (default = 0.05).}
+#'   }
+#' @param efa_thresholds A named list of thresholds for the internal EFA check.
+#'   \describe{
+#'     \item{\code{main_load}}{Minimum acceptable main loading (default = 0.4).}
+#'     \item{\code{cross_load}}{Maximum acceptable cross-loading (default = 0.35).
+#'       Only evaluated in multidimensional models.}
+#'   }
 #' @param details Logical.
-#'   If \code{FALSE} (default), prints only the summary logs of items recommended for deletion.
-#'   If \code{TRUE}, prints detailed statistical tables (Item Analysis with stars) and detailed EFA results (using bruceR).
+#'   If \code{FALSE} (default), prints only the summary logs of items
+#'   recommended for deletion at each stage.
+#'   If \code{TRUE}, prints the injected model syntax, factor correlation
+#'   syntax, detailed Item Analysis tables (with significance stars), and
+#'   detailed EFA results (via \pkg{bruceR} if available).
 #'
 #' @return A \code{data.frame} containing the simulated Likert scale data.
+#'   All columns are numeric. The data frame includes every item specified in
+#'   \code{model_syntax} (including bad items), so that the user can reproduce
+#'   the full item analysis and deletion workflow.
+#'
+#' @section Workflow:
+#' The function proceeds through the following stages internally:
+#' \enumerate{
+#'   \item \strong{Model construction.} Parse \code{model_syntax}, inject random
+#'     loadings (if \code{loading_range} is specified), and append factor
+#'     covariance syntax (if \code{factor_cor} is specified).
+#'   \item \strong{Data generation.} Call \code{lavaan::simulateData()} with the
+#'     assembled model. If \code{standardized = TRUE} fails (e.g., due to a
+#'     non-positive-definite implied matrix), the function falls back to
+#'     \code{standardized = FALSE} with post-hoc standardization.
+#'   \item \strong{Signal dilution.} Manipulate designated bad items at the
+#'     continuous (z-score) level before Likert conversion.
+#'   \item \strong{Likert conversion.} Map z-scores to discrete Likert values
+#'     using skewed quantile cutpoints.
+#'   \item \strong{Item Analysis (Stage 1).} Evaluate CITC, Critical Ratio,
+#'     and Cronbach's alpha if deleted for each factor's items.
+#'   \item \strong{EFA check (Stage 2).} Run an internal EFA
+#'     (\code{psych::fa()}) on the items surviving Stage 1 and flag those with
+#'     low main loadings or high cross-loadings.
+#' }
 #'
 #' @importFrom lavaan lavaanify simulateData
 #' @importFrom psych alpha fa describe
@@ -37,10 +110,10 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Example 1: Unidimensional Model (1 factor, 10 items)
-#' # x1, x2: Bad items for Stage 1 (Low CITC)
-#' # x10: Bad item for Stage 2 (Low Loading)
-#' # Note: We use 10 items to ensure enough remain for EFA after dropping bad ones.
+#' # --- Example 1: Unidimensional Model ---
+#' # 1 factor, 10 items.
+#' # x1, x2 are designed to fail Item Analysis (Stage 1).
+#' # x10 is designed to show a low loading in EFA (Stage 2).
 #' model_uni <- 'F1 =~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10'
 #' bad_uni <- list(stage1 = c("x1", "x2"), stage2 = c("x10"))
 #'
@@ -48,24 +121,45 @@
 #'   model_syntax = model_uni,
 #'   items_to_drop = bad_uni,
 #'   n_obs = 300,
+#'   loading_range = c(0.65, 0.80),
 #'   details = TRUE
 #' )
 #'
-#' # Example 2: Multidimensional Model (2 factors, 10 items)
-#' # x1: Bad for Stage 1
-#' # x6: Bad for Stage 2 (Cross-loading)
-#' model_multi <- '
+#' # --- Example 2: Multidimensional Model with Scalar factor_cor ---
+#' # 3 factors, 15 items. All pairwise factor correlations set to 0.4.
+#' # x1 fails Stage 1; x6 cross-loads in Stage 2.
+#' model_3f <- '
 #'   F1 =~ x1 + x2 + x3 + x4 + x5
 #'   F2 =~ x6 + x7 + x8 + x9 + x10
+#'   F3 =~ x11 + x12 + x13 + x14 + x15
 #' '
-#' bad_multi <- list(stage1 = c("x1"), stage2 = c("x6"))
+#' bad_3f <- list(stage1 = c("x1"), stage2 = c("x6"))
 #'
-#' df_multi <- simulate_efa(
-#'   model_syntax = model_multi,
-#'   items_to_drop = bad_multi,
+#' df_3f <- simulate_efa(
+#'   model_syntax = model_3f,
+#'   items_to_drop = bad_3f,
 #'   n_obs = 500,
-#'   skew_params = list(good = -0.5, bad = 2.0, jitter = 0.2),
-#'   details = FALSE # Will still print summary of drops
+#'   factor_cor = 0.4,
+#'   details = FALSE
+#' )
+#'
+#' # --- Example 3: Multidimensional Model with Correlation Matrix ---
+#' # Specify different correlations for each factor pair.
+#' cor_mat <- matrix(c(
+#'   1.0, 0.5, 0.2,
+#'   0.5, 1.0, 0.6,
+#'   0.2, 0.6, 1.0
+#' ), nrow = 3, byrow = TRUE,
+#'    dimnames = list(c("F1","F2","F3"), c("F1","F2","F3")))
+#'
+#' df_custom <- simulate_efa(
+#'   model_syntax = model_3f,
+#'   items_to_drop = bad_3f,
+#'   n_obs = 400,
+#'   factor_cor = cor_mat,
+#'   loading_range = c(0.70, 0.90),
+#'   skew_params = list(good = -0.3, bad = 1.5, jitter = 0.1),
+#'   details = TRUE
 #' )
 #' }
 simulate_efa <- function(
@@ -73,16 +167,28 @@ simulate_efa <- function(
     items_to_drop = list(),
     n_obs = 300,
     likert_points = 5,
+    factor_cor = 0.3,
+    loading_range = c(0.70, 0.85),
     skew_params = list(good = -0.5, bad = 2.0, jitter = 0.2),
     ia_thresholds = list(citc = 0.2, p_val = 0.05),
-    efa_thresholds = list(main_load = 0.4, cross_load = 0.35),
+    efa_thresholds = list(main_load = 0.4, cross_load = 0.32),
     details = FALSE
 ) {
 
-  if(details) {
+  if (details) {
     cat("==========================================================\n")
     cat("          Simulation Data Generation Report               \n")
     cat("==========================================================\n\n")
+  }
+
+  # --- 0. Input Validation ---
+  if (!is.null(loading_range)) {
+    if (!is.numeric(loading_range) || length(loading_range) != 2) {
+      stop("loading_range must be a numeric vector of length 2 (e.g., c(0.70, 0.85)).")
+    }
+    if (loading_range[1] > loading_range[2]) {
+      loading_range <- sort(loading_range)
+    }
   }
 
   # --- 1. Model Parsing ---
@@ -91,9 +197,96 @@ simulate_efa <- function(
   items_map <- ptable[ptable$op == "=~", c("lhs", "rhs")]
   all_items <- unique(items_map$rhs)
   is_unidimensional <- length(factors) == 1
+  n_factors <- length(factors)
+
+  # --- 1.3 Inject Factor Loadings ---
+  if (!is.null(loading_range)) {
+    lines <- strsplit(model_syntax, "\n")[[1]]
+    new_lines <- c()
+
+    for (line in lines) {
+      trimmed <- trimws(line)
+      if (!grepl("=~", trimmed)) {
+        new_lines <- c(new_lines, line)
+        next
+      }
+
+      parts <- strsplit(trimmed, "=~")[[1]]
+      lhs <- trimws(parts[1])
+      rhs_items <- trimws(strsplit(parts[2], "\\+")[[1]])
+
+      new_rhs <- sapply(rhs_items, function(item) {
+        clean_item <- trimws(item)
+        if (grepl("\\*", clean_item)) return(clean_item)
+        lam <- round(stats::runif(1, loading_range[1], loading_range[2]), 3)
+        paste0(lam, "*", clean_item)
+      })
+
+      new_lines <- c(new_lines, paste0(lhs, " =~ ", paste(new_rhs, collapse = " + ")))
+    }
+
+    model_syntax <- paste(new_lines, collapse = "\n")
+
+    if (details) {
+      cat("[Info] Model with injected loadings:\n")
+      cat(model_syntax, "\n\n")
+    }
+  }
+
+  # Re-parse after injection
+  ptable <- lavaan::lavaanify(model_syntax, auto = TRUE)
+  factors <- unique(ptable$lhs[ptable$op == "=~"])
+  items_map <- ptable[ptable$op == "=~", c("lhs", "rhs")]
+  all_items <- unique(items_map$rhs)
+
+  # --- 1.5 Build Factor Covariance Syntax ---
+  factor_cov_syntax <- ""
+
+  if (!is_unidimensional && !is.null(factor_cor) && n_factors >= 2) {
+
+    if (is.matrix(factor_cor)) {
+      cor_mat <- factor_cor
+      if (nrow(cor_mat) != n_factors || ncol(cor_mat) != n_factors) {
+        stop(paste0("factor_cor matrix dimensions (", nrow(cor_mat), "x", ncol(cor_mat),
+                    ") do not match the number of factors (", n_factors, ")."))
+      }
+      if (!is.null(rownames(cor_mat)) && !is.null(colnames(cor_mat))) {
+        missing <- setdiff(factors, rownames(cor_mat))
+        if (length(missing) > 0) {
+          stop(paste0("factor_cor matrix is missing factor name(s): ",
+                      paste(missing, collapse = ", ")))
+        }
+        cor_mat <- cor_mat[factors, factors]
+      }
+    } else if (is.numeric(factor_cor) && length(factor_cor) == 1) {
+      cor_mat <- matrix(factor_cor, nrow = n_factors, ncol = n_factors)
+      diag(cor_mat) <- 1.0
+    } else {
+      stop("factor_cor must be either a single numeric value or a square matrix.")
+    }
+
+    cov_lines <- c()
+    for (i in 2:n_factors) {
+      for (j in 1:(i - 1)) {
+        r <- cor_mat[i, j]
+        cov_lines <- c(cov_lines,
+                       paste0(factors[i], " ~~ ", round(r, 4), " * ", factors[j]))
+      }
+    }
+    factor_cov_syntax <- paste(cov_lines, collapse = "\n")
+
+    if (details) {
+      cat("[Info] Factor correlation syntax appended:\n")
+      cat(factor_cov_syntax, "\n\n")
+    }
+  }
 
   # --- 2. Stage 2 Manipulation (Syntax Level for Multidimensional) ---
   model_for_sim <- model_syntax
+
+  if (nchar(factor_cov_syntax) > 0) {
+    model_for_sim <- paste0(model_for_sim, "\n", factor_cov_syntax)
+  }
 
   if (!is.null(items_to_drop$stage2)) {
     for (bad_item in items_to_drop$stage2) {
@@ -101,23 +294,24 @@ simulate_efa <- function(
       orig_factor <- items_map$lhs[items_map$rhs == bad_item]
 
       if (!is_unidimensional) {
-        # Multidimensional: Create Cross-loading via Syntax
-        # This is safe because it appends new lines
         distractor <- setdiff(factors, orig_factor)[1]
         cross_syntax <- paste0("\n", distractor, " =~ 0.5 * ", bad_item)
         model_for_sim <- paste0(model_for_sim, cross_syntax)
       }
-      # Note: Unidimensional manipulation is handled at data level (Step 3.5)
-      # to avoid regex issues that could break the model structure.
     }
   }
 
+  if (details) {
+    cat("[Info] Final model for simulation:\n")
+    cat(model_for_sim, "\n\n")
+  }
+
   # --- 3. Generate Base Data (Z-scores) ---
-  # Fallback to standardized=FALSE if manipulation breaks positive definiteness
   raw_data <- tryCatch({
     lavaan::simulateData(model_for_sim, sample.nobs = n_obs, standardized = TRUE)
   }, error = function(e) {
-    if(details) message("  [System] Standardized generation failed. Switching to unstandardized + manual scaling.")
+    cat("  [System] Standardized generation failed (", conditionMessage(e),
+        "). Switching to unstandardized + manual scaling.\n")
     d <- lavaan::simulateData(model_for_sim, sample.nobs = n_obs, standardized = FALSE)
     as.data.frame(scale(d))
   })
@@ -127,27 +321,25 @@ simulate_efa <- function(
   # A. Stage 1 Bad Items (Dilute Signal -> Low CITC)
   if (!is.null(items_to_drop$stage1)) {
     for (bad_item in items_to_drop$stage1) {
-      if(bad_item %in% colnames(raw_data)) {
+      if (bad_item %in% colnames(raw_data)) {
         original_signal <- raw_data[[bad_item]]
         noise <- stats::rnorm(n_obs, mean = 0, sd = 1)
-        # Mix: 15% Signal + 85% Noise
         mixed_signal <- 0.15 * original_signal + 0.85 * noise
-        raw_data[[bad_item]] <- scale(mixed_signal)[,1]
+        raw_data[[bad_item]] <- scale(mixed_signal)[, 1]
       }
     }
   }
 
   # B. Stage 2 Bad Items (Unidimensional ONLY -> Low Loading)
-  # This avoids modifying the model syntax for single-factor models, which is error-prone.
   if (is_unidimensional && !is.null(items_to_drop$stage2)) {
     for (bad_item in items_to_drop$stage2) {
-      if(bad_item %in% colnames(raw_data)) {
-        if(details) message(paste("  [Info] Diluting item", bad_item, "to create low loading (Unidimensional)."))
+      if (bad_item %in% colnames(raw_data)) {
+        if (details) cat("  [Info] Diluting item", bad_item,
+                         "to create low loading (unidimensional model).\n")
         original_signal <- raw_data[[bad_item]]
         noise <- stats::rnorm(n_obs)
-        # Mix: 30% Signal + 70% Noise -> Loading approx 0.3
         mixed_signal <- 0.30 * original_signal + 0.70 * noise
-        raw_data[[bad_item]] <- scale(mixed_signal)[,1]
+        raw_data[[bad_item]] <- scale(mixed_signal)[, 1]
       }
     }
   }
@@ -158,10 +350,8 @@ simulate_efa <- function(
     if (!col %in% all_items) next
     sk_val <- 0
     if (col %in% items_to_drop$stage1) {
-      # Bad items: extreme skew
       sk_val <- skew_params$bad * sample(c(1, -1), 1)
     } else {
-      # Good items: specified skew + jitter
       sk_val <- skew_params$good + stats::runif(1, -skew_params$jitter, skew_params$jitter)
     }
     likert_data[[col]] <- .sim_likertize(raw_data[[col]], n_levels = likert_points, skew = sk_val)
@@ -173,7 +363,7 @@ simulate_efa <- function(
   ia_log <- data.frame(Item = character(), Reason = character(), stringsAsFactors = FALSE)
   ia_drop_list <- c()
 
-  if(details) {
+  if (details) {
     cat("\n----------------------------------------------------------\n")
     cat(" [Stage 1] Detailed Item Analysis Report\n")
     cat("----------------------------------------------------------\n")
@@ -183,17 +373,14 @@ simulate_efa <- function(
     f_items <- intersect(items_map$rhs[items_map$lhs == f], colnames(likert_data))
     if (length(f_items) < 2) next
 
-    # Run Internal Helper
     ia_res <- .sim_run_item_analysis(likert_data, pattern = "{i}", indices = f_items)
     if (is.null(ia_res)) next
 
-    # 1. Print Detailed Table ONLY if details = TRUE
-    if(details) {
+    if (details) {
       cat(paste0("\nFactor: ", f, "\n"))
       print(ia_res$formatted, row.names = FALSE)
     }
 
-    # 2. Logic Check (Always runs)
     raw_stats <- ia_res$raw
     for (i in seq_len(nrow(raw_stats))) {
       item_name <- raw_stats$Item[i]
@@ -202,13 +389,10 @@ simulate_efa <- function(
       if (raw_stats$Val_CR_p[i] > ia_thresholds$p_val) reasons <- c(reasons, "CR Not Sig")
       if (raw_stats$Val_CITC[i] < ia_thresholds$citc) reasons <- c(reasons, paste0("CITC < ", ia_thresholds$citc))
       if (raw_stats$Val_Alpha_Del[i] > raw_stats$Val_Total_Alpha[i] + 0.002) reasons <- c(reasons, "Alpha Increases")
-
-      # Safety check for zero variance
       if (raw_stats$Is_Zero_Var[i]) reasons <- c(reasons, "Zero Variance")
 
       is_target_bad <- item_name %in% items_to_drop$stage1
       if (length(reasons) > 0) {
-        # Drop if target OR stats are extremely poor OR Zero Variance
         if (is_target_bad || (raw_stats$Val_CITC[i] < ia_thresholds$citc) || raw_stats$Is_Zero_Var[i]) {
           ia_drop_list <- c(ia_drop_list, item_name)
           ia_log <- rbind(ia_log, data.frame(Item = item_name, Reason = paste(reasons, collapse = "; ")))
@@ -217,90 +401,121 @@ simulate_efa <- function(
     }
   }
 
-  # [Output] Always print Summary Log
-  cat("\n--- [Stage 1] Log: Items recommended for deletion ---\n")
-  if (nrow(ia_log) > 0) print(ia_log, row.names = FALSE) else cat("  None.\n")
+  # [Stage 1 Log] — message() for highlighted display
+  message("\n--- [Stage 1] Log: Items recommended for deletion ---")
+  if (nrow(ia_log) > 0) {
+    msg_lines <- utils::capture.output(print(ia_log, row.names = FALSE))
+    message(paste(msg_lines, collapse = "\n"))
+  } else {
+    message("  None.")
+  }
 
   # =======================================================
   # Stage 2: EFA Check
   # =======================================================
   ia_drop_unique <- unique(ia_drop_list)
-  # Use any_of() to handle cases where drop list might be empty
   data_for_efa <- likert_data %>% dplyr::select(-dplyr::any_of(ia_drop_unique))
 
-  # Clean zero variance
-  sds <- sapply(data_for_efa, sd, na.rm=TRUE)
+  sds <- sapply(data_for_efa, sd, na.rm = TRUE)
   data_for_efa <- data_for_efa[, sds > 1e-9, drop = FALSE]
 
   efa_log <- data.frame(Item = character(), Reason = character(), stringsAsFactors = FALSE)
-
-  # Check if we have enough items for EFA (at least 3 recommended)
   can_run_efa <- ncol(data_for_efa) >= 3
 
-  # 1. Detailed EFA Output (bruceR) - Only if details=TRUE
-  if(details) {
+  # Determine effective number of factors for EFA
+  surviving_items <- colnames(data_for_efa)
+  factors_with_items <- unique(items_map$lhs[items_map$rhs %in% surviving_items])
+  n_efa_factors <- max(1L, length(factors_with_items))
+
+  if (n_efa_factors < length(factors) && can_run_efa) {
+    cat("  [Warning] Only ", n_efa_factors, " of ", length(factors),
+        " factors have surviving items. EFA will extract ", n_efa_factors, " factor(s).\n")
+  }
+
+  # Detailed EFA report
+  if (details) {
     cat("\n----------------------------------------------------------\n")
     cat(" [Stage 2] Detailed EFA Report (Cleaned Data)\n")
     cat("----------------------------------------------------------\n")
 
     if (can_run_efa && requireNamespace("bruceR", quietly = TRUE)) {
-      cat(paste0("Running EFA on ", ncol(data_for_efa), " items...\n"))
+      cat("Running EFA on ", ncol(data_for_efa), " items with ",
+          n_efa_factors, " factor(s)...\n")
       tryCatch({
-        bruceR::EFA(data_for_efa, vars = colnames(data_for_efa), sort.loadings = FALSE,
-                    hide.loadings = 0.3)
+        bruceR::EFA(data_for_efa, vars = colnames(data_for_efa),
+                    sort.loadings = FALSE, hide.loadings = efa_thresholds["cross_load"]$cross_load)
       }, error = function(e) {
-        cat("Error running bruceR::EFA: ", e$message, "\n")
+        cat("  [Error] bruceR::EFA failed: ", conditionMessage(e), "\n")
       })
     } else {
-      if(!can_run_efa) cat("Skipping detailed EFA (Too few items).\n")
-      if(!requireNamespace("bruceR", quietly = TRUE)) cat("Package 'bruceR' is not installed.\n")
+      if (!can_run_efa) cat("Skipping detailed EFA (too few items).\n")
+      if (!requireNamespace("bruceR", quietly = TRUE)) cat("Package 'bruceR' is not installed.\n")
     }
   }
 
-  # 2. Internal EFA Logic Check (Always runs)
+  # Internal EFA Logic Check (Always runs)
+  efa_check_ran <- FALSE
+
   if (can_run_efa) {
     tryCatch({
-      efa_res <- psych::fa(data_for_efa, nfactors = length(factors), rotate = "promax", fm = "pa", warnings = FALSE)
-      loadings <- unclass(efa_res$loadings)
+      pca_res <- psych::principal(data_for_efa, nfactors = n_efa_factors,
+                                  rotate = "varimax")
+      loadings <- unclass(pca_res$loadings)
 
       for (itm in rownames(loadings)) {
         abs_loads <- abs(loadings[itm, ])
         sorted_loads <- sort(abs_loads, decreasing = TRUE)
         main_load <- sorted_loads[1]
-        sec_load  <- if(length(sorted_loads) > 1) sorted_loads[2] else 0
+        sec_load  <- if (length(sorted_loads) > 1) sorted_loads[2] else 0
 
         reasons <- c()
         if (main_load < efa_thresholds$main_load) {
           reasons <- c(reasons, paste0("Main Load < ", efa_thresholds$main_load))
         }
-        if (!is_unidimensional && sec_load > efa_thresholds$cross_load) {
+        if (n_efa_factors > 1 && sec_load > efa_thresholds$cross_load) {
           reasons <- c(reasons, paste0("Cross Load > ", efa_thresholds$cross_load))
         }
 
         if (length(reasons) > 0) {
-          efa_log <- rbind(efa_log, data.frame(Item = itm, Reason = paste(reasons, collapse = "; ")))
+          efa_log <- rbind(efa_log, data.frame(Item = itm,
+                                               Reason = paste(reasons, collapse = "; ")))
         }
       }
+
+      efa_check_ran <- TRUE
+      if (details) cat("  [Info] Internal PCA check completed.\n")
+
     }, error = function(e) {
-      # Silent error for internal check
+      if (details) cat("  [Info] PCA check failed: ", conditionMessage(e), "\n")
     })
+
+    if (!efa_check_ran) {
+      cat("  [Warning] Internal PCA check failed.\n")
+    }
   }
 
-  # [Output] Always print Summary Log
-  cat("\n--- [Stage 2] Internal Check Log ---\n")
+  # [Stage 2 Log]
+  message("\n--- [Stage 2] Internal Check Log ---")
   if (!can_run_efa) {
-    cat("  Skipping EFA check (Too few items remaining).\n")
+    message("  Skipping EFA check (too few items remaining).")
+  } else if (!efa_check_ran) {
+    message("  PCA extraction failed. Unable to evaluate factor structure.")
   } else if (nrow(efa_log) > 0) {
-    print(efa_log, row.names = FALSE)
+    msg_lines <- utils::capture.output(print(efa_log, row.names = FALSE))
+    message(paste(msg_lines, collapse = "\n"))
   } else {
-    cat("  None (Structure Clean).\n")
+    message("  None (Structure Clean).")
   }
 
-  if(details) {
+
+  if (details) {
     cat("\n==========================================================\n")
-    cat(paste0("Process Complete. Returning dataframe (", nrow(likert_data), " x ", ncol(likert_data), ").\n"))
+    cat("Process complete. Returning data frame (", nrow(likert_data),
+        " x ", ncol(likert_data), ").\n")
     cat("==========================================================\n")
   }
+
+  likert_data[] <- lapply(likert_data, as.numeric)
 
   return(likert_data)
 }
