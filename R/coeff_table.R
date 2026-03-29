@@ -663,7 +663,8 @@ coeff_table <- function(
 
   ## --- 5a. Fit table --------------------------------------------------------
   fit_kbl <- knitr::kable(fit_table, format = "html",
-                          caption = title_fit, align = "c") %>%
+                          caption = title_fit, align = "c",
+                          row.names = FALSE) %>%
     kableExtra::kable_classic(full_width = FALSE, html_font = "Cambria",
                               position = "left")
 
@@ -702,7 +703,8 @@ coeff_table <- function(
   coeff_kbl <- knitr::kable(coeff_df, format = "html",
                             col.names = coeff_colnames,
                             caption = title_coeff,
-                            align = c("l", rep("c", ncol(coeff_df) - 1))) %>%
+                            align = c("l", rep("c", ncol(coeff_df) - 1)),
+                            row.names = FALSE) %>%
     kableExtra::kable_classic(full_width = FALSE, html_font = "Cambria",
                               position = "left") %>%
     kableExtra::add_header_above(coeff_header)
@@ -724,7 +726,8 @@ coeff_table <- function(
     ind_kbl <- knitr::kable(indirect_table, format = "html",
                             col.names = ind_colnames,
                             caption = title_indirect,
-                            align = c("l","l","l","l","c","c","c","c","c")) %>%
+                            align = c("l","l","l","l","c","c","c","c","c"),
+                            row.names = FALSE) %>%
       kableExtra::kable_classic(full_width = FALSE, html_font = "Cambria",
                                 position = "left")
 
