@@ -1,6 +1,6 @@
-# iterative_removing2: revised removal-only iterative cleaning
+# iterative_removing: revised removal-only iterative cleaning
 #
-# Differences from interative_removing():
+# Design notes (vs. the retired prototype interative_removing):
 # - Per-model fit checking: each model_configs entry may set check_fit = FALSE
 #   (e.g., total-score structural models); saturated models (df = 0) are
 #   auto-skipped with a note.
@@ -14,7 +14,7 @@
 #   interactions; fit -> Mahalanobis distance; cmb -> LOO first-eigenvalue
 #   reduction); vectors are summed and harm to currently-significant key
 #   paths is subtracted as a protection penalty.
-# - Best-state checkpointing via an aggregate distance-to-pass (total_gap2):
+# - Best-state checkpointing via an aggregate distance-to-pass (total_gap):
 #   if the loop ends without full success the best intermediate state is
 #   restored, so the result is never worse than the input.
 # - Fallback z-score selection only uses variables that appear in models.
@@ -32,7 +32,7 @@
 #' @return list with `latents` (character), `items_by_factor` (named list),
 #'   `first_order` (character), `is_hier` (logical).
 #' @keywords internal
-parse_measurement2 <- function(model_syntax, observed) {
+parse_measurement <- function(model_syntax, observed) {
   pt <- tryCatch(lavaan::lavaanify(model_syntax), error = function(e) NULL)
   if (is.null(pt)) return(NULL)
   lo <- pt[pt$op == "=~", , drop = FALSE]
@@ -52,7 +52,7 @@ parse_measurement2 <- function(model_syntax, observed) {
 
 #' Internal: Cronbach's alpha from a covariance matrix
 #' @keywords internal
-alpha_from_cov2 <- function(S) {
+alpha_from_cov <- function(S) {
   if (is.null(S) || any(!is.finite(S))) return(NA_real_)
   p <- ncol(S)
   if (is.null(p) || p < 2) return(NA_real_)
@@ -64,7 +64,7 @@ alpha_from_cov2 <- function(S) {
 #' Internal: omega-like reliability from standardized loadings, with guards
 #' @return list(value, note) — value is NA when loadings are unusable.
 #' @keywords internal
-omega_from_loadings2 <- function(loadings) {
+omega_from_loadings <- function(loadings) {
   if (length(loadings) < 2 || any(!is.finite(loadings))) {
     return(list(value = NA_real_, note = "insufficient/non-finite loadings"))
   }
@@ -96,7 +96,7 @@ omega_from_loadings2 <- function(loadings) {
 #' @return named list per construct: `type`, `pass`, `alpha_overall`,
 #'   `n_dimensions`/`n_items`, `dimensions`, optional `note`/`error`.
 #' @keywords internal
-calculate_reliability_alpha2 <- function(data, var_list,
+calculate_reliability_alpha <- function(data, var_list,
                                          criteria_alpha_dim = 0.7,
                                          criteria_alpha_overall2 = 0.8,
                                          criteria_alpha_single = 0.7) {
@@ -120,7 +120,7 @@ calculate_reliability_alpha2 <- function(data, var_list,
     }
 
     pe <- tryCatch(parameterEstimates(fit, standardized = TRUE), error = function(e) NULL)
-    ms <- parse_measurement2(model_syntax, obs)
+    ms <- parse_measurement(model_syntax, obs)
     if (is.null(pe) || is.null(ms)) {
       results[[construct_name]] <- list(
         type = "Unknown", pass = FALSE, alpha_overall = NA_real_,
@@ -141,7 +141,7 @@ calculate_reliability_alpha2 <- function(data, var_list,
       for (f1 in ms$first_order) {
         items <- ms$items_by_factor[[f1]]
         if (length(items) >= 2) {
-          om <- omega_from_loadings2(get_std(f1, items))
+          om <- omega_from_loadings(get_std(f1, items))
           if (!is.null(om$note)) notes <- c(notes, paste0(f1, ": ", om$note))
           dim_results[[f1]] <- list(alpha = om$value, n_items = length(items))
         } else {
@@ -155,7 +155,7 @@ calculate_reliability_alpha2 <- function(data, var_list,
         S <- tryCatch(stats::cov(data[, all_items, drop = FALSE],
                                  use = "pairwise.complete.obs"),
                       error = function(e) NULL)
-        alpha_from_cov2(S)
+        alpha_from_cov(S)
       } else NA_real_
 
       dim_alphas <- vapply(dim_results, function(x) {
@@ -177,7 +177,7 @@ calculate_reliability_alpha2 <- function(data, var_list,
       f <- ms$latents[1]
       items <- ms$items_by_factor[[f]]
       if (length(items) >= 2) {
-        om <- omega_from_loadings2(get_std(f, items))
+        om <- omega_from_loadings(get_std(f, items))
         results[[construct_name]] <- list(
           type = "Single-dimension construct",
           pass = !is.na(om$value) && om$value >= criteria_alpha_single,
@@ -248,10 +248,10 @@ check_cmb <- function(data, items, max_variance = 0.40, method = c("pca", "fa"))
 
 #' Internal: collect all items appearing in var_list measurement models
 #' @keywords internal
-all_items_from_var_list2 <- function(var_list, observed) {
+all_items_from_var_list <- function(var_list, observed) {
   if (is.null(var_list)) return(character(0))
   items <- unlist(lapply(var_list, function(m) {
-    ms <- parse_measurement2(m, observed)
+    ms <- parse_measurement(m, observed)
     if (is.null(ms)) return(character(0))
     unlist(ms$items_by_factor, use.names = FALSE)
   }), use.names = FALSE)
@@ -271,12 +271,12 @@ all_items_from_var_list2 <- function(var_list, observed) {
 #'   optional `key_paths` (labeled paths), optional `check_fit` (logical,
 #'   default TRUE).
 #' @param var_list optional named list of measurement models.
-#' @param criteria list of thresholds/flags (see [iterative_removing2()]).
+#' @param criteria list of thresholds/flags (see [iterative_removing()]).
 #' @param verbose logical; print a report.
 #' @return list with sublists `reliability`, `paths`, `fit`, `cmb`, each with
 #'   `pass` (logical or NA when not checked) and `details`.
 #' @keywords internal
-check_all_criteria2 <- function(data, model_configs, var_list = NULL,
+check_all_criteria <- function(data, model_configs, var_list = NULL,
                                 criteria, verbose = TRUE) {
   say <- function(...) if (verbose) cat(...)
   obs <- setdiff(colnames(data), "..row_id")
@@ -311,7 +311,7 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
     } else 0.8
 
     rel_results <- tryCatch(
-      calculate_reliability_alpha2(
+      calculate_reliability_alpha(
         data[, obs, drop = FALSE], var_list,
         criteria_alpha_dim = min_alpha,
         criteria_alpha_overall2 = min_overall2,
@@ -368,7 +368,13 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
 
     for (config_name in names(model_configs)) {
       config <- model_configs[[config_name]]
-      if (is.null(config$key_paths)) next
+      # Two buckets: key_paths require significance (plus optional sign);
+      # direction_only require the correct sign only, significance waived.
+      specs <- c(
+        lapply(config$key_paths, function(s) list(spec = s, require_sig = TRUE)),
+        lapply(config$direction_only, function(s) list(spec = s, require_sig = FALSE))
+      )
+      if (length(specs) == 0) next
       fit <- fits[[config_name]]
       if (is.null(fit)) {
         say("  ✗ Model ", config_name, " failed to fit/converge\n", sep = "")
@@ -378,10 +384,12 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
       pe <- tryCatch(parameterEstimates(fit), error = function(e) NULL)
       if (is.null(pe)) { all_paths_pass <- FALSE; next }
 
-      for (path_spec in config$key_paths) {
+      for (sp in specs) {
         any_path_checked <- TRUE
-        # Optional direction prefix: "+lab" requires a POSITIVE significant
-        # coefficient, "-lab" a NEGATIVE one; no prefix = direction-agnostic
+        path_spec <- sp$spec
+        require_sig <- sp$require_sig
+        # Optional direction prefix: "+lab" requires a POSITIVE coefficient,
+        # "-lab" a NEGATIVE one; no prefix = direction-agnostic
         expected_sign <- if (startsWith(path_spec, "+")) 1
         else if (startsWith(path_spec, "-")) -1 else 0
         path_label <- sub("^[+-]", "", path_spec)
@@ -398,10 +406,11 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
         is_sig <- is.finite(pv) && pv < alpha_level
         sign_ok <- expected_sign == 0 ||
           (is.finite(path_row$est) && sign(path_row$est) == expected_sign)
-        path_pass <- is_sig && sign_ok
+        path_pass <- sign_ok && (!require_sig || is_sig)
 
         dir_note <- if (expected_sign == 0) "" else {
           paste0(", expected ", ifelse(expected_sign > 0, "positive", "negative"),
+                 ifelse(require_sig, "", " (sig. not required)"),
                  ifelse(sign_ok, "", " [WRONG SIGN]"))
         }
         say(sprintf("  %s %s (%s): est = %.3f, p = %s%s\n",
@@ -414,6 +423,7 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
           model = config_name, label = path_label,
           estimate = path_row$est, pvalue = pv, z = zv,
           expected_sign = expected_sign, sign_ok = sign_ok,
+          require_sig = require_sig,
           significant = is_sig, pass = path_pass
         )
       }
@@ -476,7 +486,7 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
     cmb_items <- if (!is.null(criteria$cmb$items)) {
       criteria$cmb$items
     } else {
-      all_items_from_var_list2(var_list, obs)
+      all_items_from_var_list(var_list, obs)
     }
     max_var <- if (!is.null(criteria$cmb$max_variance_first)) {
       criteria$cmb$max_variance_first
@@ -522,12 +532,12 @@ check_all_criteria2 <- function(data, model_configs, var_list = NULL,
 #' @param var_list named list of measurement models.
 #' @param criteria list of thresholds/flags.
 #' @param n_to_remove integer, number of cases to select.
-#' @param check_results last evaluation from `check_all_criteria2()` (used to
+#' @param check_results last evaluation from `check_all_criteria()` (used to
 #'   know which constructs/models/paths are failing).
 #' @param verbose logical.
 #' @return integer vector of row indices relative to `data`.
 #' @keywords internal
-identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
+identify_bad_cases <- function(data, model_configs, var_list, criteria,
                                 n_to_remove, check_results,
                                 verbose = TRUE) {
   say <- function(...) if (verbose) cat(...)
@@ -536,9 +546,9 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
 
   # Restrict every strategy to variables that actually appear in the models
   model_vars <- unique(c(
-    all_items_from_var_list2(var_list, obs),
+    all_items_from_var_list(var_list, obs),
     unlist(lapply(model_configs, function(cf) {
-      ms <- parse_measurement2(cf$model, obs)
+      ms <- parse_measurement(cf$model, obs)
       pt <- tryCatch(lavaan::lavaanify(cf$model), error = function(e) NULL)
       c(if (!is.null(ms)) unlist(ms$items_by_factor, use.names = FALSE),
         if (!is.null(pt)) intersect(unique(c(pt$lhs, pt$rhs)), obs))
@@ -559,7 +569,7 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
   # Proxy getter for one model: observed numeric -> the column itself;
   # latent -> row mean of its items; product term "A:B" -> product of proxies
   make_proxy <- function(model_syntax) {
-    ms <- parse_measurement2(model_syntax, obs)
+    ms <- parse_measurement(model_syntax, obs)
     getv <- function(v) {
       if (v %in% num_vars) return(data[[v]])
       if (!is.null(ms) && v %in% names(ms$items_by_factor)) {
@@ -597,7 +607,7 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
     g <- rep(0, n)
     used <- character(0)
     for (nm in failing) {
-      ms <- parse_measurement2(var_list[[nm]], obs)
+      ms <- parse_measurement(var_list[[nm]], obs)
       if (is.null(ms)) next
       items <- unique(unlist(ms$items_by_factor, use.names = FALSE))
       items <- items[items %in% num_vars]
@@ -606,7 +616,7 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
       X <- data[, items, drop = FALSE]
       S0 <- tryCatch(stats::cov(X, use = "pairwise.complete.obs"),
                      error = function(e) NULL)
-      a0 <- alpha_from_cov2(S0)
+      a0 <- alpha_from_cov(S0)
       if (is.na(a0)) next
 
       thr <- if (identical(rel[[nm]]$type, "Second-order factor")) {
@@ -620,7 +630,7 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
         S <- tryCatch(stats::cov(X[-i, , drop = FALSE],
                                  use = "pairwise.complete.obs"),
                       error = function(e) NULL)
-        ai <- alpha_from_cov2(S)
+        ai <- alpha_from_cov(S)
         if (!is.na(ai) && ai > a0) g[i] <- g[i] + (ai - a0) * w
       }
       used <- c(used, nm)
@@ -816,7 +826,7 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
     }
 
     vars <- unique(unlist(lapply(failing_models, function(nm) {
-      ms <- parse_measurement2(model_configs[[nm]]$model, obs)
+      ms <- parse_measurement(model_configs[[nm]]$model, obs)
       if (is.null(ms)) return(character(0))
       unlist(ms$items_by_factor, use.names = FALSE)
     }), use.names = FALSE))
@@ -850,7 +860,7 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
     items <- if (!is.null(criteria$cmb$items)) {
       criteria$cmb$items
     } else {
-      all_items_from_var_list2(var_list, obs)
+      all_items_from_var_list(var_list, obs)
     }
     items <- intersect(items, num_vars)
     if (length(items) < 3) return(NULL)
@@ -937,11 +947,11 @@ identify_bad_cases2 <- function(data, model_configs, var_list, criteria,
 #' SAME problem — used to keep/restore the best intermediate state — not an
 #' absolute quality measure.
 #'
-#' @param check_results output of `check_all_criteria2()`.
+#' @param check_results output of `check_all_criteria()`.
 #' @param criteria the resolved criteria list.
 #' @return non-negative numeric scalar.
 #' @keywords internal
-total_gap2 <- function(check_results, criteria) {
+total_gap <- function(check_results, criteria) {
   gap <- 0
 
   # Reliability: alpha shortfalls (overall + first-order dimensions)
@@ -982,7 +992,13 @@ total_gap2 <- function(check_results, criteria) {
       passed <- if (!is.null(p$pass)) isTRUE(p$pass) else isTRUE(p$significant)
       if (passed) next
       es <- if (!is.null(p$expected_sign)) p$expected_sign else 0
-      if (es != 0 && is.finite(p$z)) {
+      req_sig <- if (!is.null(p$require_sig)) isTRUE(p$require_sig) else TRUE
+      if (es != 0 && !req_sig) {
+        # Sign-only path that fails: only the sign is wrong. Gap = how far the
+        # estimate sits on the wrong side (monotone as it moves toward zero
+        # and flips), so the checkpoint sees sign-flipping progress.
+        gap <- gap + if (is.finite(p$estimate)) max(0, -es * p$estimate) else 1
+      } else if (es != 0 && is.finite(p$z)) {
         gap <- gap + max(0, (z_crit - es * p$z) / z_crit) * 0.25
       } else {
         gap <- gap + if (is.finite(p$pvalue)) max(0, p$pvalue - al) else 1
@@ -1027,7 +1043,7 @@ total_gap2 <- function(check_results, criteria) {
 #' removal can manufacture "better" results. It must not be used to clean
 #' real data for substantive analysis.
 #'
-#' Compared with [interative_removing()]:
+#' Key features:
 #' \itemize{
 #'   \item Per-model fit control: set `check_fit = FALSE` in a
 #'     `model_configs` entry to exclude it from the fit check (e.g., a
@@ -1053,7 +1069,7 @@ total_gap2 <- function(check_results, criteria) {
 #'     product terms, with latents proxied by item means), so
 #'     covariate-adjusted and moderated paths are targeted correctly.
 #'   \item Best-state checkpointing: an aggregate gap (distance-to-pass over
-#'     all criteria, see [total_gap2()]) is tracked each round; if the loop
+#'     all criteria, see [total_gap()]) is tracked each round; if the loop
 #'     ends without full success, the best intermediate state is restored,
 #'     so the result is never worse than the untouched input.
 #'   \item Each model is fitted once per evaluation round; convergence is
@@ -1075,6 +1091,13 @@ total_gap2 <- function(check_results, criteria) {
 #'       toward that sign — a wrong-signed path (e.g., currently negative
 #'       when `"+cp"` is requested) is driven through zero and on to
 #'       significance on the other side, given enough removable cases.
+#'     \item `direction_only`: character vector of direction-prefixed labels
+#'       (`"+cp"`/`"-cp"`) that must have the given SIGN but whose
+#'       significance is NOT required (optional). Use this for "make the
+#'       direct path positive but it need not be significant": case
+#'       selection still pushes the coefficient toward the requested sign
+#'       (flipping it through zero if needed), and the path passes as soon
+#'       as the sign is correct, regardless of its p-value.
 #'     \item `check_fit`: logical, include this model in the fit check
 #'       (optional, default TRUE)
 #'   }
@@ -1093,7 +1116,7 @@ total_gap2 <- function(check_results, criteria) {
 #'       n = 500, 5\% + 5\%: round 1 removes 25 (475 left), round 2 removes
 #'       25 more so that the cumulative removal is 10\% of 500 (450 left).
 #'     \item `"current"`: the proportion applies to the CURRENT sample each
-#'       round (legacy behavior of [interative_removing()]). Same example:
+#'       round (legacy behavior of the retired prototype). Same example:
 #'       round 2 removes `ceiling(0.10 * 475) = 48` cases (427 left), so the
 #'       cumulative removal exceeds the nominal percentage.
 #'   }
@@ -1178,7 +1201,7 @@ total_gap2 <- function(check_results, criteria) {
 #'   )
 #' )
 #'
-#' res <- iterative_removing2(
+#' res <- iterative_removing(
 #'   data = dat,
 #'   model_configs = model_configs,
 #'   var_list = var_list,
@@ -1192,11 +1215,11 @@ total_gap2 <- function(check_results, criteria) {
 #' res$history
 #' }
 #'
-#' @seealso interative_removing, calculate_reliability_alpha2,
-#'   check_all_criteria2, identify_bad_cases2, check_cmb
+#' @seealso calculate_reliability_alpha,
+#'   check_all_criteria, identify_bad_cases, check_cmb
 #' @importFrom stats cov cor complete.cases mahalanobis factanal
 #' @export
-iterative_removing2 <- function(data,
+iterative_removing <- function(data,
                                 model_configs,
                                 var_list = NULL,
                                 initial_remove_pct = 0.05,
@@ -1251,7 +1274,7 @@ iterative_removing2 <- function(data,
   }
 
   say("\n[Step 1] Evaluate initial data (n = ", initial_n, ")\n", sep = "")
-  check_results <- check_all_criteria2(current_data, model_configs, var_list,
+  check_results <- check_all_criteria(current_data, model_configs, var_list,
                                        criteria, verbose = verbose)
 
   if (all_pass_fun(check_results)) {
@@ -1266,7 +1289,7 @@ iterative_removing2 <- function(data,
       history = data.frame()
     ))
   }
-  cur_gap <- total_gap2(check_results, criteria)
+  cur_gap <- total_gap(check_results, criteria)
   say("\n✗ Criteria not met (aggregate gap = ", sprintf("%.4f", cur_gap),
       "); starting iterative removal\n", sep = "")
 
@@ -1320,7 +1343,7 @@ iterative_removing2 <- function(data,
         "\n", sep = "")
 
     bad_idx <- tryCatch(
-      identify_bad_cases2(current_data, model_configs, var_list, criteria,
+      identify_bad_cases(current_data, model_configs, var_list, criteria,
                           n_to_remove, check_results,
                           verbose = verbose),
       error = function(e) {
@@ -1339,10 +1362,10 @@ iterative_removing2 <- function(data,
         "\n", sep = "")
 
     say("\n[Re-evaluate]\n")
-    check_results <- check_all_criteria2(current_data, model_configs, var_list,
+    check_results <- check_all_criteria(current_data, model_configs, var_list,
                                          criteria, verbose = verbose)
     all_pass <- all_pass_fun(check_results)
-    cur_gap <- total_gap2(check_results, criteria)
+    cur_gap <- total_gap(check_results, criteria)
 
     flag <- function(x) if (is.na(x$pass)) "-" else if (isTRUE(x$pass)) "✓" else "✗"
     say(sprintf("\nStatus: Reliability[%s] Paths[%s] Fit[%s] CMB[%s] | gap = %.4f (best %.4f)\n",
