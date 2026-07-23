@@ -15,16 +15,44 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
-Imports: 
-    bruceR,
+Imports:
+    broom,
+    car,
+    cli,
+    crosstable,
     dplyr,
+    effsize,
+    emmeans,
+    fda,
     ggplot2,
     glue,
+    grDevices,
+    graphics,
+    gtools,
     kableExtra,
     knitr,
+    lavaan,
     magrittr,
-    MplusAutomation
-Suggests: 
+    MASS,
+    MplusAutomation,
+    nnet,
+    PerFit,
+    psych,
+    purrr,
+    rlang,
+    semTools,
+    sn,
+    stats,
+    stringr,
+    tibble,
+    tidyr,
+    tidyselect,
+    tools,
+    utils
+Suggests:
+    bruceR,
+    flextable,
+    mirt,
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

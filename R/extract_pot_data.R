@@ -40,8 +40,8 @@ extract_plot_data <- function(model, model_label) {
 
   # Extract class counts and proportions
   class_proportions <- model[["class_counts"]][["mostLikely"]] %>%
-    mutate(proportion = str_c(formatC(proportion * 100, format = "f", digits = 2), "%")) %>%
-    mutate(label = str_c("Class ", class, " (", proportion, ")"),
+    mutate(proportion = stringr::str_c(formatC(proportion * 100, format = "f", digits = 2), "%")) %>%
+    mutate(label = stringr::str_c("Class ", class, " (", proportion, ")"),
            LatentClass = as.character(class)) %>%
     select(LatentClass, label)
 

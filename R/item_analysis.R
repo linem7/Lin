@@ -36,7 +36,7 @@
 #' @importFrom tidyselect eval_select
 #' @importFrom rlang expr
 #' @importFrom tibble rownames_to_column
-#' @importFrom psych describe alpha
+#' @importFrom psych describe
 #' @importFrom stats t.test cor.test quantile
 #' @importFrom car leveneTest
 #'

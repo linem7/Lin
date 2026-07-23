@@ -119,7 +119,7 @@ calculate_reliability_alpha <- function(data, var_list,
       next
     }
 
-    pe <- tryCatch(parameterEstimates(fit, standardized = TRUE), error = function(e) NULL)
+    pe <- tryCatch(lavaan::parameterEstimates(fit, standardized = TRUE), error = function(e) NULL)
     ms <- parse_measurement(model_syntax, obs)
     if (is.null(pe) || is.null(ms)) {
       results[[construct_name]] <- list(
@@ -381,7 +381,7 @@ check_all_criteria <- function(data, model_configs, var_list = NULL,
         all_paths_pass <- FALSE
         next
       }
-      pe <- tryCatch(parameterEstimates(fit), error = function(e) NULL)
+      pe <- tryCatch(lavaan::parameterEstimates(fit), error = function(e) NULL)
       if (is.null(pe)) { all_paths_pass <- FALSE; next }
 
       for (sp in specs) {
@@ -454,7 +454,7 @@ check_all_criteria <- function(data, model_configs, var_list = NULL,
         all_fit_pass <- FALSE
         next
       }
-      fm <- tryCatch(fitMeasures(fit, c("df", "cfi", "tli", "rmsea", "srmr")),
+      fm <- tryCatch(lavaan::fitMeasures(fit, c("df", "cfi", "tli", "rmsea", "srmr")),
                      error = function(e) NULL)
       if (is.null(fm)) { all_fit_pass <- FALSE; next }
       if (fm[["df"]] == 0) {

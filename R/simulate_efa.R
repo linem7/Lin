@@ -99,7 +99,7 @@
 #' }
 #'
 #' @importFrom lavaan lavaanify simulateData
-#' @importFrom psych alpha fa describe
+#' @importFrom psych fa describe
 #' @importFrom dplyr select mutate filter case_when pull left_join all_of across where any_of
 #' @importFrom stringr str_detect str_extract str_replace
 #' @importFrom glue glue

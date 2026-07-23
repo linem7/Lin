@@ -93,13 +93,6 @@ coeff_table_logit <- function(model,
                               title      = NULL,
                               ...) {
 
-  # --- LIBRARY CHECKS ---
-  require(dplyr)
-  require(tidyr)
-  require(broom)
-  require(knitr)
-  require(kableExtra)
-
   # 0. CHECK INPUTS
   ok1 <- inherits(model, "multinom")
   ok2 <- inherits(model, "glm") && family(model)$family == "binomial"

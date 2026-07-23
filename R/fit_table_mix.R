@@ -105,7 +105,6 @@ fit_table_mix <- function(..., digits = 3, digits_prop = 1, plot = FALSE) {
   if (!plot) return(holder)
 
   # prepare tidy data from formatted holder (numeric coercion on-the-fly)
-  library(tidyr); library(dplyr); library(ggplot2); library(stringr)
   fits_long <- holder %>%
     mutate(Classes = str_replace(Model, " model.*", "")) %>%   # clean title
     select(Classes, AIC, BIC, aBIC) %>%
