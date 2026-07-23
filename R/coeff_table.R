@@ -8,6 +8,9 @@
 #' HTML tables or returned as plain \code{data.frame}s for downstream
 #' processing.
 #'
+#' Only single-group, single-level, non-mixture models are supported; outputs
+#' containing multiple groups, levels, or latent classes raise an error.
+#'
 #' @param model A single \code{mplus.model} object returned by
 #'   \code{MplusAutomation::readModels()}.
 #' @param stat Character vector of statistics to display for each path.
@@ -21,7 +24,8 @@
 #'   \code{model$summaries} (e.g.\ \code{"AIC"}, \code{"BIC"}).
 #' @param digits_coeff Integer. Number of decimal places for coefficient
 #'   estimates, standard errors, and confidence interval bounds.
-#'   Defaults to \code{2}.
+#'   Defaults to \code{2}. All displayed numbers are rounded half up
+#'   (e.g.\ 0.125 becomes 0.13), not by IEEE round-half-to-even.
 #' @param digits_fit Integer. Number of decimal places for fit indices.
 #'   Defaults to \code{2}.
 #' @param digits_pct Integer. Number of decimal places for effect proportions
@@ -36,7 +40,8 @@
 #'   Defaults to \code{TRUE}.
 #' @param ci_level Numeric. Confidence level for extracted intervals.
 #'   Currently only \code{0.95} is supported (Mplus outputs 2.5\% and 97.5\%
-#'   percentiles). Reserved for future extension.
+#'   percentiles); any other value raises an error. Reserved for future
+#'   extension.
 #' @param exclude Character vector of PCRE patterns. Predictors whose names
 #'   match any pattern are excluded from the path-coefficient table.
 #' @param title_coeff,title_fit,title_indirect Character strings used as table
@@ -92,7 +97,9 @@
 #' The function reads bootstrap (or Bayesian credibility) intervals directly
 #' from the Mplus CINTERVAL output parsed by \pkg{MplusAutomation}. Symmetric
 #' Wald-type intervals are \strong{not} computed. If the output file does not
-#' contain a CINTERVAL section, the CI column will be blank.
+#' contain a CINTERVAL section, the CI column will be blank. If a CINTERVAL
+#' section exists but its 2.5\%/97.5\% columns cannot be identified, an error
+#' is raised rather than guessing.
 #'
 #' @seealso \code{\link[MplusAutomation]{readModels}} for reading Mplus output;
 #'   \code{\link[kableExtra]{kable_classic}} for table styling.
@@ -184,18 +191,49 @@ coeff_table <- function(
   if (!all(stat %in% allowed_stat))
     stop("`stat` must contain only: ", paste(allowed_stat, collapse = ", "))
 
+  if (!isTRUE(all.equal(ci_level, 0.95)))
+    stop("Currently only ci_level = 0.95 is supported ",
+         "(Mplus CINTERVAL 2.5%/97.5% percentiles).")
+
+  ## multi-group / multilevel / mixture outputs are not supported: merging CIs
+  ## by lhs/op/rhs alone would silently mispair rows across groups/levels
+  .check_single_group <- function(df) {
+    for (col in c("Group", "LatentClass", "BetweenWithin")) {
+      if (col %in% names(df) && length(unique(df[[col]])) > 1)
+        stop("coeff_table() does not support multi-group, multilevel, or ",
+             "mixture models (multiple values found in column '", col, "').")
+    }
+  }
+  if (!is.null(model$parameters$unstandardized))
+    .check_single_group(as.data.frame(model$parameters$unstandardized,
+                                      stringsAsFactors = FALSE))
+
   ## =========================================================================
   ## Helper: formatting utilities
   ## =========================================================================
 
-  .fmt_num <- function(x, digits = 3)
-    ifelse(is.na(x), "", sprintf(paste0("%.", digits, "f"), x))
+  ## Mplus uses 999(.000) as a sentinel for undefined estimates/SEs/p-values;
+  ## treat it as missing rather than printing "999.00"
+  .na999 <- function(x) replace(x, !is.na(x) & x == 999, NA_real_)
 
-  .fmt_p <- function(p)
+  ## nudge so that exact halves (e.g. 0.125) round half up (-> 0.13) instead
+  ## of following sprintf's IEEE round-half-to-even (-> 0.12)
+  .half_up <- function(x) x + sign(x) * 1e-8
+
+  .fmt_num <- function(x, digits = 3) {
+    x <- .na999(as.numeric(x))
+    ifelse(is.na(x), "", sprintf(paste0("%.", digits, "f"), .half_up(x)))
+  }
+
+  .fmt_p <- function(p) {
+    p <- .na999(as.numeric(p))
     ifelse(is.na(p), "",
-           ifelse(p < .001, "< .001", sub("^0", "", sprintf("%.3f", p))))
+           ifelse(p < .001, "< .001",
+                  sub("^0", "", sprintf("%.3f", .half_up(p)))))
+  }
 
   .add_stars <- function(est_str, p_num) {
+    p_num <- .na999(as.numeric(p_num))
     s <- ifelse(is.na(p_num), "",
                 ifelse(p_num < .001, "***",
                        ifelse(p_num < .01, "**",
@@ -204,9 +242,11 @@ coeff_table <- function(
   }
 
   .fmt_ci <- function(lo, hi, digits = 2) {
+    lo <- .na999(as.numeric(lo))
+    hi <- .na999(as.numeric(hi))
     ifelse(is.na(lo) | is.na(hi), "",
-           paste0("[", sprintf(paste0("%.", digits, "f"), lo),
-                  ", ", sprintf(paste0("%.", digits, "f"), hi), "]"))
+           paste0("[", sprintf(paste0("%.", digits, "f"), .half_up(lo)),
+                  ", ", sprintf(paste0("%.", digits, "f"), .half_up(hi)), "]"))
   }
 
   ## =========================================================================
@@ -217,14 +257,10 @@ coeff_table <- function(
     nms <- names(ci_df)
     lo_col <- grep("low2\\.5", nms, value = TRUE)[1]
     hi_col <- grep("up2\\.5",  nms, value = TRUE)[1]
-    if (is.na(lo_col) || is.na(hi_col)) {
-      num_cols <- nms[!nms %in% c("paramHeader", "param", "outcome",
-                                  "LatentClass", "BetweenWithin",
-                                  "Group", "pred", "intervening",
-                                  "summary", "ReferenceClass")]
-      lo_col <- num_cols[1]
-      hi_col <- num_cols[length(num_cols)]
-    }
+    if (is.na(lo_col) || is.na(hi_col))
+      stop("Could not locate the 2.5%/97.5% percentile columns in the ",
+           "CINTERVAL output (expected names matching 'low2.5'/'up2.5'; ",
+           "found: ", paste(nms, collapse = ", "), ").")
     list(lo = lo_col, hi = hi_col)
   }
 
@@ -292,10 +328,15 @@ coeff_table <- function(
       v <- raw_vals[i]
       if (is.na(v)) return("")
       pat <- paste0("%.", digits_fit, "f")
-      if (labels[i] == "df") return(as.character(as.integer(v)))
-      if (labels[i] %in% c("CFI", "TLI", "RMSEA", "SRMR") && v < 1)
-        return(sub("^0", "", sprintf(pat, v)))
-      sprintf(pat, v)
+      if (labels[i] == "df") {
+        ## some estimators (e.g. MLMV) yield fractional df; only display as
+        ## integer when the value actually is one
+        if (abs(v - round(v)) < 1e-8) return(as.character(as.integer(round(v))))
+        return(sprintf(pat, .half_up(v)))
+      }
+      if (labels[i] %in% c("CFI", "TLI", "RMSEA", "SRMR") && abs(v) < 1)
+        return(sub("^(-?)0", "\\1", sprintf(pat, .half_up(v))))
+      sprintf(pat, .half_up(v))
     }, character(1))
 
     df_fit <- data.frame(t(fmt), stringsAsFactors = FALSE)
@@ -347,9 +388,13 @@ coeff_table <- function(
       reg_tbl <- reg_tbl[!grepl(pat, reg_tbl$rhs, ignore.case = TRUE, perl = TRUE), ]
     }
 
-    ## merge CI
+    ## merge CI; merge() sorts by the key columns, so restore the original
+    ## Mplus row order afterwards (it determines predictor/DV display order)
     if (!is.null(ci_reg) && "ci" %in% stat) {
+      reg_tbl$.row_order <- seq_len(nrow(reg_tbl))
       reg_tbl <- merge(reg_tbl, ci_reg, by = c("lhs", "op", "rhs"), all.x = TRUE)
+      reg_tbl <- reg_tbl[order(reg_tbl$.row_order), , drop = FALSE]
+      reg_tbl$.row_order <- NULL
     }
 
     ## 2d. Identify endogenous variables and predictors -------------------------
@@ -504,6 +549,12 @@ coeff_table <- function(
     overall  <- .norm_p(overall)
     specific <- .norm_p(specific)
 
+    if (is.null(overall) || nrow(overall) == 0) {
+      warning("MODEL INDIRECT section was found but contains no overall ",
+              "(total/direct) effects; skipping the indirect-effects table.")
+      return(NULL)
+    }
+
     rows_list <- list()
     suppression_flag <- FALSE
     pairs <- unique(overall[, c("pred", "outcome")])
@@ -547,11 +598,11 @@ coeff_table <- function(
             if (is_suppression) {
               if (!is.na(dir_est) && dir_est != 0)
                 pct_str <- paste0(sprintf(paste0("%.", digits_pct, "f"),
-                                          abs(est_n / dir_est) * 100), "%")
+                                          .half_up(abs(est_n / dir_est) * 100)), "%")
             } else {
               if (!is.na(total_est) && abs(total_est) > 1e-10)
                 pct_str <- paste0(sprintf(paste0("%.", digits_pct, "f"),
-                                          (est_n / total_est) * 100), "%")
+                                          .half_up((est_n / total_est) * 100)), "%")
             }
           }
         }
@@ -622,6 +673,12 @@ coeff_table <- function(
                     dir_row$est[1], dir_row$se[1],
                     dir_row$p[1], ci_d$lo, ci_d$hi)
       }
+    }
+
+    if (length(rows_list) == 0) {
+      warning("MODEL INDIRECT section was found but yielded no usable rows; ",
+              "skipping the indirect-effects table.")
+      return(NULL)
     }
 
     indirect_df <- do.call(rbind, rows_list)

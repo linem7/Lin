@@ -41,7 +41,8 @@ SRMR). Names must match columns in
 
 \item{digits_coeff}{Integer. Number of decimal places for coefficient
 estimates, standard errors, and confidence interval bounds.
-Defaults to \code{2}.}
+Defaults to \code{2}. All displayed numbers are rounded half up
+(e.g.\ 0.125 becomes 0.13), not by IEEE round-half-to-even.}
 
 \item{digits_fit}{Integer. Number of decimal places for fit indices.
 Defaults to \code{2}.}
@@ -61,7 +62,8 @@ Defaults to \code{TRUE}.}
 
 \item{ci_level}{Numeric. Confidence level for extracted intervals.
 Currently only \code{0.95} is supported (Mplus outputs 2.5\% and 97.5\%
-percentiles). Reserved for future extension.}
+percentiles); any other value raises an error. Reserved for future
+extension.}
 
 \item{exclude}{Character vector of PCRE patterns. Predictors whose names
 match any pattern are excluded from the path-coefficient table.}
@@ -120,6 +122,10 @@ indirect, and direct effects. Tables can be rendered as \pkg{kableExtra}
 HTML tables or returned as plain \code{data.frame}s for downstream
 processing.
 }
+\details{
+Only single-group, single-level, non-mixture models are supported; outputs
+containing multiple groups, levels, or latent classes raise an error.
+}
 \section{Effect proportions}{
 
 When the direct and all specific indirect effects share the same sign
@@ -136,7 +142,9 @@ console message alert the user. The Total row never shows a proportion.
 The function reads bootstrap (or Bayesian credibility) intervals directly
 from the Mplus CINTERVAL output parsed by \pkg{MplusAutomation}. Symmetric
 Wald-type intervals are \strong{not} computed. If the output file does not
-contain a CINTERVAL section, the CI column will be blank.
+contain a CINTERVAL section, the CI column will be blank. If a CINTERVAL
+section exists but its 2.5\%/97.5\% columns cannot be identified, an error
+is raised rather than guessing.
 }
 
 \examples{
