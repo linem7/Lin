@@ -56,11 +56,18 @@
 #'   \code{FALSE} (default), only the fit and coefficient tables are produced,
 #'   which allows the function to work with any SEM or regression model that
 #'   does not include a MODEL INDIRECT command.
-#' @param render Logical. If \code{TRUE} (default), tables are printed as
-#'   \pkg{kableExtra} HTML tables and the underlying list is returned
-#'   invisibly. If \code{FALSE}, no rendering is performed and the list is
-#'   returned visibly, which is convenient for passing results to other
-#'   programs or AI-based interpretation.
+#' @param which Character vector selecting which tables to print when
+#'   \code{render = TRUE}: any combination of \code{"fit"}, \code{"coeff"},
+#'   and \code{"indirect"}, or \code{"all"} (default, equivalent to all
+#'   three). Tables are printed in the order given. Explicitly requesting
+#'   \code{"indirect"} automatically sets \code{include_indirect = TRUE}
+#'   (with a message). \code{which} only affects printing; the returned list
+#'   always contains every computed table.
+#' @param render Logical. If \code{TRUE} (default), the tables selected by
+#'   \code{which} are printed as \pkg{kableExtra} HTML tables and the
+#'   underlying list is returned invisibly. If \code{FALSE}, nothing is
+#'   printed and the list is returned visibly; the pre-built HTML tables
+#'   remain available in the \code{html} element for printing later.
 #'
 #' @return A list with the following elements:
 #' \describe{
@@ -69,18 +76,17 @@
 #'   \item{\code{coeff}}{A \code{data.frame} with predictors as rows and
 #'     endogenous-variable \eqn{\times} statistic combinations as columns.
 #'     When MODEL CONSTRAINT (NEW) parameters exist, they occupy the bottom
-#'     rows (below row \code{.meta$n_reg}).}
+#'     rows.}
 #'   \item{\code{indirect}}{A \code{data.frame} with columns
 #'     \code{Predictor}, \code{Outcome}, \code{Effect} (Total / Total Indirect
 #'     / Specific Indirect / Direct), \code{Path} (arrow-delimited mediator
 #'     chain), \code{est}, \code{se}, \code{p}, \code{ci}, and \code{pct}
 #'     (effect proportion). \code{NULL} when \code{include_indirect = FALSE}
 #'     or when no MODEL INDIRECT section exists in the output.}
-#'   \item{\code{.meta}}{A list of rendering metadata: \code{endogenous}
-#'     (character vector of endogenous variable names), \code{stat},
-#'     \code{n_reg} (number of regression rows before NEW parameters),
-#'     \code{has_new}, \code{standardized}, and \code{suppression} (logical
-#'     flag for inconsistent mediation).}
+#'   \item{\code{html}}{A list with elements \code{fit}, \code{coeff}, and
+#'     \code{indirect} holding the corresponding \pkg{kableExtra} table
+#'     objects (\code{NULL} for tables that were not built), so individual
+#'     tables can be printed later without recomputation.}
 #' }
 #' When \code{render = TRUE} the list is returned \strong{invisibly}.
 #'
@@ -145,6 +151,9 @@
 #' ## -- Full mediation report with indirect effects --
 #' coeff_table(mod, include_indirect = TRUE)
 #'
+#' ## -- Print only the coefficient table --
+#' coeff_table(mod, which = "coeff")
+#'
 #' ## -- Unstandardised, extra fit indices --
 #' coeff_table(mod, standardized = FALSE, indices = c("AIC", "BIC"),
 #'                 include_indirect = TRUE)
@@ -176,6 +185,7 @@ coeff_table <- function(
     notes_coeff    = NULL,
     notes_indirect = NULL,
     include_indirect = FALSE,
+    which          = "all",
     render         = TRUE
 ) {
 
@@ -194,6 +204,20 @@ coeff_table <- function(
   if (!isTRUE(all.equal(ci_level, 0.95)))
     stop("Currently only ci_level = 0.95 is supported ",
          "(Mplus CINTERVAL 2.5%/97.5% percentiles).")
+
+  which <- tolower(which)
+  which_explicit <- !identical(which, "all")
+  bad <- setdiff(which, c("all", "fit", "coeff", "indirect"))
+  if (length(bad) > 0)
+    stop("`which` must contain only: all, fit, coeff, indirect (got: ",
+         paste(bad, collapse = ", "), ").")
+  if ("all" %in% which) which <- c("fit", "coeff", "indirect")
+  which <- unique(which)
+  if (length(which) == 0) stop("`which` must select at least one table.")
+  if (which_explicit && "indirect" %in% which && !include_indirect) {
+    message("`which` requests the indirect table; setting include_indirect = TRUE.")
+    include_indirect <- TRUE
+  }
 
   ## multi-group / multilevel / mixture outputs are not supported: merging CIs
   ## by lhs/op/rhs alone would silently mispair rows across groups/levels
@@ -702,21 +726,12 @@ coeff_table <- function(
     fit      = fit_table,
     coeff    = coeff_result$coeff,
     indirect = indirect_table,
-    .meta    = list(
-      endogenous   = coeff_result$endogenous,
-      stat         = coeff_result$stat,
-      n_reg        = coeff_result$n_reg,
-      has_new      = coeff_result$has_new,
-      standardized = standardized,
-      suppression  = if (!is.null(indirect_table)) attr(indirect_table, "suppression") else FALSE
-    )
+    html     = list(fit = NULL, coeff = NULL, indirect = NULL)
   )
 
   ## =========================================================================
-  ## PART 5:  Render
+  ## PART 5:  Build HTML tables (always, so result$html is usable later)
   ## =========================================================================
-
-  if (!render) return(result)
 
   ## --- 5a. Fit table --------------------------------------------------------
   fit_kbl <- knitr::kable(fit_table, format = "html",
@@ -806,12 +821,18 @@ coeff_table <- function(
     }
   }
 
+  result$html <- list(fit = fit_kbl, coeff = coeff_kbl, indirect = ind_kbl)
+
   ## --- 5d. Print -------------------------------------------------------------
+  if (!render) return(result)
+
+  for (nm in which) {
+    k <- result$html[[nm]]
+    if (is.null(k)) next
+    cat("\n\n")
+    print(k)
+  }
   cat("\n")
-  print(fit_kbl)
-  cat("\n\n")
-  print(coeff_kbl)
-  if (!is.null(ind_kbl)) { cat("\n\n"); print(ind_kbl) }
 
   invisible(result)
 }

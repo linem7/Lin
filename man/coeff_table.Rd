@@ -21,6 +21,7 @@ coeff_table(
   notes_coeff = NULL,
   notes_indirect = NULL,
   include_indirect = FALSE,
+  which = "all",
   render = TRUE
 )
 }
@@ -84,11 +85,19 @@ indirect-effects decomposition table from the MODEL INDIRECT section. If
 which allows the function to work with any SEM or regression model that
 does not include a MODEL INDIRECT command.}
 
-\item{render}{Logical. If \code{TRUE} (default), tables are printed as
-\pkg{kableExtra} HTML tables and the underlying list is returned
-invisibly. If \code{FALSE}, no rendering is performed and the list is
-returned visibly, which is convenient for passing results to other
-programs or AI-based interpretation.}
+\item{which}{Character vector selecting which tables to print when
+\code{render = TRUE}: any combination of \code{"fit"}, \code{"coeff"},
+and \code{"indirect"}, or \code{"all"} (default, equivalent to all
+three). Tables are printed in the order given. Explicitly requesting
+\code{"indirect"} automatically sets \code{include_indirect = TRUE}
+(with a message). \code{which} only affects printing; the returned list
+always contains every computed table.}
+
+\item{render}{Logical. If \code{TRUE} (default), the tables selected by
+\code{which} are printed as \pkg{kableExtra} HTML tables and the
+underlying list is returned invisibly. If \code{FALSE}, nothing is
+printed and the list is returned visibly; the pre-built HTML tables
+remain available in the \code{html} element for printing later.}
 }
 \value{
 A list with the following elements:
@@ -98,18 +107,17 @@ A list with the following elements:
   \item{\code{coeff}}{A \code{data.frame} with predictors as rows and
     endogenous-variable \eqn{\times} statistic combinations as columns.
     When MODEL CONSTRAINT (NEW) parameters exist, they occupy the bottom
-    rows (below row \code{.meta$n_reg}).}
+    rows.}
   \item{\code{indirect}}{A \code{data.frame} with columns
     \code{Predictor}, \code{Outcome}, \code{Effect} (Total / Total Indirect
     / Specific Indirect / Direct), \code{Path} (arrow-delimited mediator
     chain), \code{est}, \code{se}, \code{p}, \code{ci}, and \code{pct}
     (effect proportion). \code{NULL} when \code{include_indirect = FALSE}
     or when no MODEL INDIRECT section exists in the output.}
-  \item{\code{.meta}}{A list of rendering metadata: \code{endogenous}
-    (character vector of endogenous variable names), \code{stat},
-    \code{n_reg} (number of regression rows before NEW parameters),
-    \code{has_new}, \code{standardized}, and \code{suppression} (logical
-    flag for inconsistent mediation).}
+  \item{\code{html}}{A list with elements \code{fit}, \code{coeff}, and
+    \code{indirect} holding the corresponding \pkg{kableExtra} table
+    objects (\code{NULL} for tables that were not built), so individual
+    tables can be printed later without recomputation.}
 }
 When \code{render = TRUE} the list is returned \strong{invisibly}.
 }
@@ -187,6 +195,9 @@ coeff_table(mod)
 
 ## -- Full mediation report with indirect effects --
 coeff_table(mod, include_indirect = TRUE)
+
+## -- Print only the coefficient table --
+coeff_table(mod, which = "coeff")
 
 ## -- Unstandardised, extra fit indices --
 coeff_table(mod, standardized = FALSE, indices = c("AIC", "BIC"),
