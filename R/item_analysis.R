@@ -134,10 +134,18 @@ item_analysis <- function(data,
   #── 3. Prepare for CR: compute TotalScore & high/low groups
   tmp <- selected_items %>%
     dplyr::mutate(
-      TotalScore = rowMeans(dplyr::across(dplyr::everything()), na.rm = TRUE),
+      TotalScore = rowMeans(dplyr::across(dplyr::everything()), na.rm = TRUE)
+    )
+
+  n_valid <- sum(!is.na(tmp$TotalScore))
+  rk <- rank(tmp$TotalScore, na.last = "keep", ties.method = "average")
+
+  tmp <- tmp %>%
+    dplyr::mutate(
+      PctRank = rk / n_valid * 100,
       PerformanceGroup = dplyr::case_when(
-        TotalScore <= stats::quantile(TotalScore, 0.27, na.rm = TRUE) ~ "Low",
-        TotalScore >= stats::quantile(TotalScore, 0.73, na.rm = TRUE) ~ "High",
+        rk * 100 <= 27 * n_valid ~ "Low",
+        rk * 100 >= 73 * n_valid ~ "High",
         TRUE ~ NA_character_
       )
     )
