@@ -151,7 +151,7 @@ item_analysis <- function(data,
     )
 
   #── 4. Descriptives
-  desc_df <- psych::describe(selected_items) %>%
+  desc_df <- psych::describe(selected_items, type = 2) %>%
     as.data.frame() %>%
     tibble::rownames_to_column("Item") %>%
     dplyr::transmute(
